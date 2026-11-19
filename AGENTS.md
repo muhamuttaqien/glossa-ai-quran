@@ -8,7 +8,8 @@ These instructions apply to this Android repository. Read them before changing t
 
 - Work directly in this repository. Keep Android source under `app/`, the original brand artwork under `design/`, and user-facing preview images under `preview/`.
 - Make focused changes. Preserve existing features and preferences unless the task calls for changing them. Update the README when behavior, setup, content provenance, or limitations change.
-- Keep generated builds, caches, local SDK paths, and secrets out of Git. Review staged files before committing. Use the connected repository's normal Git workflow and verify the remote result before claiming a push succeeded.
+- For changes to this repository, update the connected GitHub repository first, then pull the committed change into the local checkout. Check for uncommitted local work and branch divergence before pulling; preserve that work and resolve conflicts without overwriting it. Verify the GitHub commit and that the local checkout matches it before reporting completion. If direct GitHub editing is unavailable, explain the limitation and agree on another route.
+- Keep generated builds, caches, local SDK paths, and secrets out of Git. Review changed files and commit scope before updating GitHub.
 - Do not invent milestone names. Describe work as implemented, verified, or validated on a device according to the evidence actually available.
 
 ## Qur'an content integrity
