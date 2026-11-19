@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,6 +30,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.edit
 import kotlinx.coroutines.CancellationException
 import android.graphics.BitmapFactory
 
@@ -90,23 +91,23 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val repository = QuranRepository(applicationContext)
         setContent {
-            val preferences = remember { getSharedPreferences("reader", Context.MODE_PRIVATE) }
+            val preferences = remember { getSharedPreferences("reader", MODE_PRIVATE) }
             var night by remember { mutableStateOf(preferences.getBoolean("night", false)) }
             val palette = if (night) darkColorScheme(
                 primary = Brand, onPrimary = TextWhite,
                 background = Background, onBackground = TextWhite,
                 surface = SurfaceBlack, onSurface = TextWhite,
-                surfaceVariant = CardsBlack, secondary = Brand
+                surfaceVariant = CardsBlack, secondary = Brand,
             ) else lightColorScheme(
                 primary = Brand, onPrimary = TextWhite,
                 background = Color(0xFFF7F6F2), surface = Paper,
-                onSurface = Ink, secondary = Gold
+                onSurface = Ink, secondary = Gold,
             )
             MaterialTheme(colorScheme = palette) {
-                QuranApp(repository, player, night, onToggleNight = {
+                QuranApp(repository, player, night) {
                     night = !night
-                    preferences.edit().putBoolean("night", night).apply()
-                })
+                    preferences.edit { putBoolean("night", night) }
+                }
             }
         }
     }
@@ -117,17 +118,18 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun QuranApp(
     repository: QuranRepository, player: VersePlayer,
-    night: Boolean, onToggleNight: () -> Unit
+    night: Boolean, onToggleNight: () -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val preferences = remember { context.getSharedPreferences("reader", Context.MODE_PRIVATE) }
     var reciter by remember {
-        mutableStateOf(Reciter.choices.firstOrNull {
-            it.edition == preferences.getString("reciter", "ar.alafasy")
-        } ?: Reciter.choices.first())
+        val savedEdition = preferences.getString("reciter", "ar.alafasy")
+        val savedReciter = Reciter.choices.firstOrNull { (_, edition) -> edition == savedEdition }
+        mutableStateOf(savedReciter ?: Reciter.choices.first())
     }
     var bookmarks by remember { mutableStateOf(preferences.getStringSet("bookmarks", emptySet())!!.toSet()) }
     var lastRead by remember {
@@ -157,7 +159,7 @@ private fun QuranApp(
     var currentPage by rememberSaveable { mutableIntStateOf(1) }
     var pageVerses by remember { mutableStateOf<List<PageVerse>>(emptyList()) }
     var pageError by remember { mutableStateOf<String?>(null) }
-    var showPageVerses by remember { mutableStateOf(false) }
+    var showPageVerses by remember { mutableStateOf(value = false) }
     val verseListState = rememberLazyListState()
 
     fun openSurah(surah: Surah, ayah: Int = 1) {
@@ -173,23 +175,26 @@ private fun QuranApp(
 
     fun markRead(surah: Int, ayah: Int) {
         lastRead = VerseReference(surah, ayah)
-        preferences.edit().putInt("last_surah", surah).putInt("last_ayah", ayah).apply()
+        preferences.edit {
+            putInt("last_surah", surah)
+            putInt("last_ayah", ayah)
+        }
     }
 
     fun toggleBookmark(surah: Int, ayah: Int) {
         val key = "$surah:$ayah"
         bookmarks = if (key in bookmarks) bookmarks - key else bookmarks + key
-        preferences.edit().putStringSet("bookmarks", bookmarks).apply()
+        preferences.edit { putStringSet("bookmarks", bookmarks) }
     }
 
     fun shareAyah(ayah: Ayah) {
-        val surah = selected ?: return
+        val (surahNumber, surahName) = selected ?: return
         val translations = when (language) {
             1 -> "${ayah.translationEn}\n${chapter?.translatorEn.orEmpty()}"
             2 -> "${ayah.translationEn}\n${chapter?.translatorEn.orEmpty()}\n\n${ayah.translationId}\n${chapter?.translatorId.orEmpty()}"
             else -> "${ayah.translationId}\n${chapter?.translatorId.orEmpty()}"
         }
-        val text = "${surah.name} ${surah.number}:${ayah.number}\n${ayah.arabic}\n\n$translations"
+        val text = "$surahName $surahNumber:${ayah.number}\n${ayah.arabic}\n\n$translations"
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, text)
@@ -232,11 +237,11 @@ private fun QuranApp(
         catch (_: Exception) { audioError = "Couldn't load recitation. Try again." }
     }
     LaunchedEffect(selected?.number, chapter) {
-        if (selected != null && chapter != null) {
-            val index = (startAyah - 1).coerceIn(0, chapter!!.verses.lastIndex)
-            verseListState.requestScrollToItem(index)
-            currentPage = chapter!!.verses[index].page
-        }
+        if (selected == null) return@LaunchedEffect
+        val verses = chapter?.verses ?: return@LaunchedEffect
+        val index = (startAyah - 1).coerceIn(0, verses.lastIndex)
+        verseListState.requestScrollToItem(index)
+        currentPage = verses[index].page
     }
     LaunchedEffect(currentPage, selected?.number) {
         if (selected == null) return@LaunchedEffect
@@ -260,7 +265,7 @@ private fun QuranApp(
         if (mode == 0) currentPage = verses[index].page
         markRead(surah.number, verses[index].number)
         player.play(url) {
-            if (index + 1 < verses.size) startVerse(index + 1)
+            if (index < verses.lastIndex) startVerse(index + 1)
             else player.stop()
         }
     }
@@ -295,7 +300,7 @@ private fun QuranApp(
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                             TextButton(onClick = {
                                 mode = index
-                                preferences.edit().putInt("mode", index).apply()
+                                preferences.edit { putInt("mode", index) }
                             }, modifier = Modifier.fillMaxWidth()) {
                                 Text(label, color = if (mode == index) MaterialTheme.colorScheme.onSurface else Color.Gray)
                             }
@@ -309,7 +314,7 @@ private fun QuranApp(
                 }
                 if (mode == 1) TranslationSelector(language) { next ->
                     language = next
-                    preferences.edit().putInt("translation_language", next).apply()
+                    preferences.edit { putInt("translation_language", next) }
                 }
                 if (chapterError != null) Failure(chapterError!!) { chapterRetry++ }
                 else if (chapter == null) Loading()
@@ -333,8 +338,7 @@ private fun QuranApp(
                                     play = { startVerse(ayah.number - 1) },
                                     bookmark = { toggleBookmark(selected!!.number, ayah.number) },
                                     share = { shareAyah(ayah) },
-                                    read = { markRead(selected!!.number, ayah.number) }
-                                )
+                                ) { markRead(selected!!.number, ayah.number) }
                             }
                             item {
                                 Text(
@@ -349,7 +353,7 @@ private fun QuranApp(
                         player.stop()
                         currentVerse = -1
                         reciter = next
-                        preferences.edit().putString("reciter", next.edition).apply()
+                        preferences.edit { putString("reciter", next.edition) }
                     }
                     if (audioError != null) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -392,7 +396,7 @@ private fun QuranApp(
                             if (surah != null) {
                                 openSurah(surah, verse.reference.ayah)
                                 mode = 1
-                                preferences.edit().putInt("mode", 1).apply()
+                                preferences.edit { putInt("mode", 1) }
                             }
                         }, modifier = Modifier.fillMaxWidth()) {
                             Text("${verse.surahName} • Verse ${verse.reference.ayah}", Modifier.fillMaxWidth())
@@ -495,7 +499,7 @@ private fun IndexScreen(
                 LazyColumn(Modifier.weight(1f)) { items(filtered, key = { it.number }) { SurahRow(it, night) { open(it, 1) } } }
             }
             1 -> {
-                if (juzError != null) Text(juzError, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
+                juzError?.let { Text(it, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) }
                 LazyColumn(Modifier.weight(1f)) {
                     items((1..30).toList()) { number ->
                         Row(
@@ -510,12 +514,12 @@ private fun IndexScreen(
                 }
             }
             else -> {
-                val entries = bookmarks.mapNotNull { key ->
+                val entries = bookmarks.asSequence().mapNotNull { key ->
                     val parts = key.split(':')
                     val surah = surahs.firstOrNull { it.number == parts.getOrNull(0)?.toIntOrNull() }
                     val ayah = parts.getOrNull(1)?.toIntOrNull()
                     if (surah != null && ayah != null && ayah in 1..surah.ayahCount) surah to ayah else null
-                }.sortedWith(compareBy({ it.first.number }, { it.second }))
+                }.sortedWith(compareBy({ it.first.number }, { it.second })).toList()
                 if (entries.isEmpty()) Text("No bookmarked verses yet.", Modifier.padding(24.dp))
                 LazyColumn(Modifier.weight(1f)) {
                     items(entries, key = { "${it.first.number}:${it.second}" }) { (surah, ayah) ->
@@ -601,7 +605,7 @@ private fun MushafPage(
                 Text("$page / 604", Modifier.weight(1f), color = pageText, textAlign = TextAlign.Center, fontSize = 13.sp)
                 TextButton(onClick = onNext, enabled = page < 604) { Text("Next ›") }
             }
-            if (error != null) Text(error, color = Color(0xFF9B3333), fontSize = 11.sp)
+            error?.let { Text(it, color = Color(0xFF9B3333), fontSize = 11.sp) }
         }
     }
 }
@@ -614,7 +618,7 @@ private fun translationCredits(chapter: Chapter, language: Int): String = when (
 
 @Composable
 private fun TranslationSelector(selected: Int, onSelect: (Int) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(value = false) }
     val choices = listOf(1 to "English", 0 to "Indonesian", 2 to "English + Indonesian")
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
@@ -659,7 +663,7 @@ private fun AyahCard(
     isBookmarked: Boolean, audioReady: Boolean,
     play: () -> Unit, bookmark: () -> Unit, share: () -> Unit, read: () -> Unit
 ) {
-    var actionsExpanded by remember { mutableStateOf(false) }
+    var actionsExpanded by remember { mutableStateOf(value = false) }
     Card(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
         shape = RoundedCornerShape(16.dp),
@@ -705,7 +709,7 @@ private fun AyahCard(
 
 @Composable
 private fun ReciterSelector(selected: Reciter, onSelect: (Reciter) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(value = false) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("Reciter", color = Color.Gray, modifier = Modifier.padding(end = 10.dp))
         Box(Modifier.weight(1f)) {
