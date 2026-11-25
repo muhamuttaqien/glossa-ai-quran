@@ -1,7 +1,7 @@
 """Simplify the printed title banners and verse-marker ornaments.
 
 Read *original* numbered PNGs from a separate source directory, and write
-numbered PNGs to an output directory. The Arabic text and numerals are
+`-new.png` pages to an output directory. The Arabic text and numerals are
 extracted from the original pixels; no Arabic is typed or generated here.
 
     python3 tools/simplify_mushaf_artwork.py SOURCE_DIR OUTPUT_DIR
@@ -218,7 +218,7 @@ def main(source, target):
     for page in range(1, 605):
         original = np.asarray(Image.open(source / f"{page}.png").convert("RGBA"))
         output, m, b = build_page(original, page)
-        save_exact_palette(output, target / f"{page}.png")
+        save_exact_palette(output, target / f"{page}-new.png")
         markers += m
         banners += b
     if banners != 114:  # 112 on regular pages and one each on pages 1–2.
