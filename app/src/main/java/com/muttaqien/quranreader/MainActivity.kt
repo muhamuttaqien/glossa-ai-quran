@@ -3,7 +3,6 @@ package com.muttaqien.quranreader
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.view.Window
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -60,7 +59,6 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
@@ -76,7 +74,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
@@ -85,7 +82,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalDensity
-import androidx.core.view.WindowCompat
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -153,7 +149,7 @@ class MainActivity : ComponentActivity() {
                 onSurface = Ink, secondary = Gold,
             )
             MaterialTheme(colorScheme = palette) {
-                QuranApp(repository, player, night, window) {
+                QuranApp(repository, player, night) {
                     night = !night
                     preferences.edit { putBoolean("night", night) }
                 }
@@ -171,7 +167,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun QuranApp(
     repository: QuranRepository, player: VersePlayer,
-    night: Boolean, window: Window, onToggleNight: () -> Unit,
+    night: Boolean, onToggleNight: () -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val preferences = remember { context.getSharedPreferences("reader", Context.MODE_PRIVATE) }
@@ -410,14 +406,6 @@ private fun QuranApp(
         pendingListen = null
     }
     BackHandler(selected != null) { backToIndex() }
-
-    val darkNavigationBar = selected != null || night
-    val navigationBarColor = if (darkNavigationBar) Background else MaterialTheme.colorScheme.background
-    SideEffect {
-        window.navigationBarColor = navigationBarColor.toArgb()
-        WindowCompat.getInsetsController(window, window.decorView)
-            .isAppearanceLightNavigationBars = !darkNavigationBar
-    }
 
     Scaffold(containerColor = if (selected != null) Background else MaterialTheme.colorScheme.background) { padding ->
         if (selected == null) {
