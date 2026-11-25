@@ -24,6 +24,9 @@ RED = (239, 77, 77, 255)  # Glossa red #EF4D4D in both reading modes.
 MOTIF = Image.open(
     Path(__file__).resolve().parent.parent / "design/surah-title-floral-mask.png"
 ).convert("RGBA")
+AL_BAQARAH_TITLE = Image.open(
+    Path(__file__).resolve().parent.parent / "design/al-baqarah-title-mask.png"
+).convert("RGBA")
 OPENING_MARKERS = {
     1: [(154, 216), (124, 250), (97, 284), (240, 287),
         (146, 324), (218, 361), (170, 432)],
@@ -87,10 +90,10 @@ def title_ink(original, page, y1, y2):
             + 150 * original[:, :, 1].astype(np.int32)
             + 29 * original[:, :, 2].astype(np.int32)) >> 8
     mask = np.zeros((h, w), dtype=bool)
-    if page <= 2:
+    if page == 1:
         # The printed crest has detached ornament flecks at x=174–178 and
-        # x=264–272. The lettering reaches row 46 on both pages and row 77
-        # on page 2; retaining only rows 47–73 clipped those original strokes.
+        # x=264–272. The lettering reaches row 46; retaining only rows
+        # 47–73 clipped its original strokes.
         mask[46:78, 179:264] = True
         mask[46, 179:181] = False  # A separate crest fleck, not a letter.
         shift = y1 + 15 - 47
@@ -154,11 +157,21 @@ def build_page(original, page):
             output[y1:y2 + 1] = (0, 0, 0, 0)
         banner = draw_banner(w, h, y1, y2)
         output[banner[:, :, 3] > 0] = banner[banner[:, :, 3] > 0]
-        title, shift = title_ink(original, page, y1, y2)
-        for y, x in zip(*np.where(title)):
-            target_y = y + shift
-            if 0 <= target_y < h:
-                output[target_y, x] = original[y, x]
+        if page == 2:
+            # Use the lettering pixels from the user's full-resolution page 2
+            # reference. Only the title changes; the original verses remain.
+            alpha = np.asarray(AL_BAQARAH_TITLE.getchannel("A").resize(
+                (88, 30), Image.Resampling.LANCZOS
+            ))
+            title_region = output[126:156, 177:265]
+            title_region[alpha > 0, :3] = (34, 36, 35)
+            title_region[:, :, 3] = alpha
+        else:
+            title, shift = title_ink(original, page, y1, y2)
+            for y, x in zip(*np.where(title)):
+                target_y = y + shift
+                if 0 <= target_y < h:
+                    output[target_y, x] = original[y, x]
     for marker in markers:
         simplify_marker(original, output, marker)
     return output, len(markers), len(bands)
