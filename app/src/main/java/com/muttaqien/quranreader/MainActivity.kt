@@ -713,6 +713,10 @@ private fun MushafPage(
                     .semantics {
                         contentDescription = "Mushaf Madinah Hafs page $page. Tap to show or hide reading controls. Long press an ayah to select it. Swipe right for the next page or left for the previous page."
                         customActions = listOf(
+                            CustomAccessibilityAction(if (chromeVisible) "Hide reading controls" else "Show reading controls") {
+                                onToggleControls()
+                                true
+                            },
                             CustomAccessibilityAction("Next page") {
                                 if (page < 604) { onNext(); true } else false
                             },
