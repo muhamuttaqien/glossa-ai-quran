@@ -18,6 +18,13 @@ class MushafHitMap(private val context: Context) {
         }
     }
 
+    fun firstVerseOn(page: Int): VerseReference? {
+        val bounds = pages.optJSONArray(page.toString()) ?: return null
+        if (bounds.length() == 0) return null
+        val first = bounds.getJSONArray(0)
+        return VerseReference(first.getInt(1), first.getInt(2))
+    }
+
     fun verseAt(page: Int, x: Float, y: Float, width: Int, height: Int): VerseReference? {
         if (page !in 1..604 || width <= 0 || height <= 0 ||
             x !in 0f..width.toFloat() || y !in 0f..height.toFloat()
