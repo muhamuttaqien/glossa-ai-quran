@@ -804,7 +804,7 @@ private fun MushafPage(
                         val top = (size.height - image.height * scale) / 2f
                         highlightAreas.forEach { area ->
                             drawRoundRect(
-                                color = Color.White.copy(alpha = if (night) 0.24f else 0.18f),
+                                color = if (night) Color.White.copy(alpha = 0.24f) else Color.Black.copy(alpha = 0.10f),
                                 topLeft = Offset(left + area.left * scale, top + area.top * scale),
                                 size = Size(area.width() * scale, area.height() * scale),
                                 cornerRadius = CornerRadius(3.dp.toPx())
