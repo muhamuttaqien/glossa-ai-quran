@@ -336,13 +336,9 @@ private fun QuranApp(
                 modifier = Modifier.padding(padding)
             )
         } else {
-            Column(Modifier.fillMaxSize().padding(padding)) {
-                val showControls = mode != 0 || chromeVisible || chapterError != null
-                AnimatedVisibility(
-                    visible = showControls,
-                    enter = slideInVertically(animationSpec = tween(220)) { -it } + fadeIn(tween(220)),
-                    exit = slideOutVertically(animationSpec = tween(220)) { -it } + fadeOut(tween(220))
-                ) {
+            val verses = chapter?.verses.orEmpty()
+            val topControls: @Composable () -> Unit = {
+                Surface(color = if (night) CardsBlack else Paper) {
                     Column {
                         ReaderHeader(
                             if (mode == 0) pageVerses.firstOrNull()?.surahName ?: "Mushaf Madinah" else selected!!.name,
@@ -366,31 +362,100 @@ private fun QuranApp(
                                 }
                             }
                         }
-                        if (mode == 1) TranslationSelector(language) { next ->
-                            language = next
-                            preferences.edit { putInt("translation_language", next) }
+                        if (mode == 0) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(pageVerses.firstOrNull()?.surahName ?: "Page $currentPage", fontSize = 13.sp)
+                                Text(pageVerses.firstOrNull()?.let { "Juz ${it.juz}" } ?: "", fontSize = 13.sp)
+                            }
+                        } else {
+                            TranslationSelector(language) { next ->
+                                language = next
+                                preferences.edit { putInt("translation_language", next) }
+                            }
                         }
                     }
                 }
-                if (chapterError != null) Failure(chapterError!!) { chapterRetry++ }
-                else if (chapter == null) Loading()
-                else {
-                    val verses = chapter!!.verses
-                    if (mode == 0) {
-                        MushafPage(
-                            currentPage, pageVerses, night, hitMap,
-                            selectedAyah = focusedAyah?.let { VerseReference(selected!!.number, it.number) },
-                            chromeVisible = chromeVisible,
-                            onToggleControls = { chromeVisible = !chromeVisible },
-                            onPrevious = { if (currentPage > 1) currentPage-- },
-                            onNext = { if (currentPage < 604) currentPage++ },
-                            onLongPressAt = { x, y, width, height ->
-                                hitMap.verseAt(currentPage, x, y, width, height)
-                                    ?.let(::openPageAyah)
-                            },
-                            modifier = Modifier.weight(1f)
+            }
+            val bottomControls: @Composable () -> Unit = {
+                Surface(color = if (night) CardsBlack else Paper) {
+                    Column {
+                        if (mode == 0) {
+                            Text(
+                                "$currentPage / 604",
+                                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                textAlign = TextAlign.Center, fontSize = 13.sp
+                            )
+                        }
+                        ReciterSelector(reciter) { next ->
+                            player.stop()
+                            currentVerse = -1
+                            reciter = next
+                            preferences.edit { putString("reciter", next.edition) }
+                        }
+                        if (audioError != null) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(audioError!!, Modifier.weight(1f), color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                                TextButton(onClick = { audioRetry++ }) { Text("Retry") }
+                            }
+                        }
+                        PlayerBar(
+                            player, currentVerse, verses.size,
+                            audioUrls.isEmpty() && audioError == null, night,
+                            onPrevious = { startVerse((currentVerse - 1).coerceAtLeast(0)) },
+                            onNext = { startVerse((currentVerse + 1).coerceAtMost(verses.lastIndex)) },
+                            onToggle = {
+                                if (currentVerse < 0 || player.error != null) {
+                                    if (mode == 0) {
+                                        verses.firstOrNull { it.page == currentPage }
+                                            ?.let { startVerse(it.number - 1) }
+                                    } else startVerse(startAyah - 1)
+                                } else player.toggle()
+                            }
                         )
-                    } else {
+                    }
+                }
+            }
+
+            if (mode == 0 && chapter != null && chapterError == null) {
+                Box(Modifier.fillMaxSize().padding(padding)) {
+                    MushafPage(
+                        currentPage, night, hitMap,
+                        selectedAyah = focusedAyah?.let { VerseReference(selected!!.number, it.number) },
+                        chromeVisible = chromeVisible,
+                        onToggleControls = { chromeVisible = !chromeVisible },
+                        onPrevious = { if (currentPage > 1) currentPage-- },
+                        onNext = { if (currentPage < 604) currentPage++ },
+                        onLongPressAt = { x, y, width, height ->
+                            hitMap.verseAt(currentPage, x, y, width, height)
+                                ?.let(::openPageAyah)
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    AnimatedVisibility(
+                        visible = chromeVisible,
+                        modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
+                        enter = slideInVertically(animationSpec = tween(220)) { -it } + fadeIn(tween(220)),
+                        exit = slideOutVertically(animationSpec = tween(220)) { -it } + fadeOut(tween(220))
+                    ) { topControls() }
+                    AnimatedVisibility(
+                        visible = chromeVisible,
+                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                        enter = slideInVertically(animationSpec = tween(220)) { it } + fadeIn(tween(220)),
+                        exit = slideOutVertically(animationSpec = tween(220)) { it } + fadeOut(tween(220))
+                    ) { bottomControls() }
+                }
+            } else {
+                Column(Modifier.fillMaxSize().padding(padding)) {
+                    topControls()
+                    if (chapterError != null) Failure(chapterError!!) { chapterRetry++ }
+                    else if (chapter == null) Loading()
+                    else {
                         LazyColumn(Modifier.weight(1f), state = verseListState) {
                             items(verses, key = { it.number }) { ayah ->
                                 AyahCard(
@@ -410,41 +475,7 @@ private fun QuranApp(
                                 )
                             }
                         }
-                    }
-                    AnimatedVisibility(
-                        visible = showControls,
-                        enter = slideInVertically(animationSpec = tween(220)) { it } + fadeIn(tween(220)),
-                        exit = slideOutVertically(animationSpec = tween(220)) { it } + fadeOut(tween(220))
-                    ) {
-                        Column {
-                            ReciterSelector(reciter) { next ->
-                                player.stop()
-                                currentVerse = -1
-                                reciter = next
-                                preferences.edit { putString("reciter", next.edition) }
-                            }
-                            if (audioError != null) {
-                                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(audioError!!, Modifier.weight(1f), color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-                                    TextButton(onClick = { audioRetry++ }) { Text("Retry") }
-                                }
-                            }
-                            PlayerBar(
-                                player, currentVerse, verses.size,
-                                audioUrls.isEmpty() && audioError == null, night,
-                                onPrevious = { startVerse((currentVerse - 1).coerceAtLeast(0)) },
-                                onNext = { startVerse((currentVerse + 1).coerceAtMost(verses.lastIndex)) },
-                                onToggle = {
-                                    if (currentVerse < 0 || player.error != null) {
-                                        if (mode == 0) {
-                                            verses.firstOrNull { it.page == currentPage }
-                                                ?.let { startVerse(it.number - 1) }
-                                        } else startVerse(startAyah - 1)
-                                    }
-                                    else player.toggle()
-                                }
-                            )
-                        }
+                        bottomControls()
                     }
                 }
             }
@@ -646,7 +677,7 @@ private fun ReaderHeader(title: String, night: Boolean, toggleNight: () -> Unit,
 
 @Composable
 private fun MushafPage(
-    page: Int, verses: List<PageVerse>, night: Boolean,
+    page: Int, night: Boolean,
     hitMap: MushafHitMap, selectedAyah: VerseReference?,
     chromeVisible: Boolean, onToggleControls: () -> Unit,
     onPrevious: () -> Unit, onNext: () -> Unit,
@@ -661,7 +692,6 @@ private fun MushafPage(
     }
     val image = remember(bitmap) { bitmap.asImageBitmap() }
     val pageColor = if (night) CardsBlack else Paper
-    val pageText = if (night) TextWhite else Ink
     val swipeThreshold = with(LocalDensity.current) { 64.dp.toPx() }
     val latestLongPressAt by rememberUpdatedState(onLongPressAt)
     val latestToggleControls by rememberUpdatedState(onToggleControls)
@@ -700,16 +730,6 @@ private fun MushafPage(
                 )
             }.padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            AnimatedVisibility(
-                visible = chromeVisible,
-                enter = slideInVertically(animationSpec = tween(220)) { -it } + fadeIn(tween(220)),
-                exit = slideOutVertically(animationSpec = tween(220)) { -it } + fadeOut(tween(220))
-            ) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(verses.firstOrNull()?.surahName ?: "Page $page", color = pageText, fontSize = 13.sp)
-                    Text(verses.firstOrNull()?.let { "Juz ${it.juz}" } ?: "", color = pageText, fontSize = 13.sp)
-                }
-            }
             Box(
                 Modifier.fillMaxWidth().weight(1f)
                     .semantics {
@@ -762,11 +782,6 @@ private fun MushafPage(
                     )
                 }
             }
-            Text(
-                "$page / 604",
-                Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                color = pageText, textAlign = TextAlign.Center, fontSize = 13.sp
-            )
         }
     }
 }
