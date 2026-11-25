@@ -12,8 +12,12 @@ page, retaining line number, surah number, ayah number, and the original
 min/max x/y coordinates as seven-element numeric arrays:
 [line, surah, ayah, min_x, max_x, min_y, max_y].
 The source's repeated page_number and position fields were omitted.
+The boxes for verses 69:1–8 on page 566 were realigned to the bundled image
+because that page places the basmala above the first verse line.
 The Qur'an page images and Arabic text were not changed.
 
 The interaction maps those coordinates to the bundled compact PNG images.
-Taps close to a boundary fall back to a page verse list because the source
+Long presses close to a verse boundary do nothing because the source
 coordinate images and these compact PNGs are not pixel-identical.
+The white selection overlay follows dark printed pixels inside the mapped
+ayah segments and does not alter the page artwork.
