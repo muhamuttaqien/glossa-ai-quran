@@ -74,6 +74,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -947,7 +948,8 @@ private fun MushafPage(
                     modifier = Modifier.fillMaxSize().graphicsLayer {
                         translationX = dragOffset - pageWidth
                     }.padding(horizontal = 14.dp, vertical = 8.dp),
-                    contentScale = ContentScale.Fit
+                    contentScale = ContentScale.Fit,
+                    filterQuality = FilterQuality.High
                 )
             }
             if (dragOffset < 0f && previousImage != null) {
@@ -956,7 +958,8 @@ private fun MushafPage(
                     modifier = Modifier.fillMaxSize().graphicsLayer {
                         translationX = dragOffset + pageWidth
                     }.padding(horizontal = 14.dp, vertical = 8.dp),
-                    contentScale = ContentScale.Fit
+                    contentScale = ContentScale.Fit,
+                    filterQuality = FilterQuality.High
                 )
             }
             Column(
@@ -1003,7 +1006,8 @@ private fun MushafPage(
                         bitmap = image,
                         contentDescription = null,
                         modifier = Modifier.matchParentSize(),
-                        contentScale = ContentScale.Fit
+                        contentScale = ContentScale.Fit,
+                        filterQuality = FilterQuality.High
                     )
                     if (highlightAreas.isNotEmpty()) {
                         Canvas(Modifier.matchParentSize()) {

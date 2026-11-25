@@ -5,8 +5,10 @@ import android.graphics.Bitmap
 /** Keep the printed layout, render ink white on black, and retain Glossa red ornaments. */
 internal object MushafNightPalette {
     private const val GLOSSA_RED = 0xEF4D4D
-    private const val INK_LUMINANCE = 52
-    private const val PAPER_LUMINANCE = 230
+    // The compact printed PNGs already have broad gray antialiased edges.
+    // A tighter ramp keeps fine marks while avoiding a pale halo when enlarged.
+    private const val INK_LUMINANCE = 95
+    private const val PAPER_LUMINANCE = 195
 
     fun convert(source: Bitmap): Bitmap {
         val width = source.width
