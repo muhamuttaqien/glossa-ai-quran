@@ -6,6 +6,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -155,6 +161,7 @@ private fun QuranApp(
     }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var mode by remember { mutableIntStateOf(preferences.getInt("mode", 0)) } // 0: Arabic page, 1: translation
+    var chromeVisible by rememberSaveable { mutableStateOf(false) }
     var language by remember { mutableIntStateOf(preferences.getInt("translation_language", 1).coerceIn(0, 2)) }
     var surahs by remember { mutableStateOf<List<Surah>>(emptyList()) }
     var listError by remember { mutableStateOf<String?>(null) }
@@ -186,6 +193,7 @@ private fun QuranApp(
         audioUrls = emptyMap()
         startAyah = ayah
         selected = surah
+        chromeVisible = false
         openRevision++
     }
 
@@ -329,30 +337,40 @@ private fun QuranApp(
             )
         } else {
             Column(Modifier.fillMaxSize().padding(padding)) {
-                ReaderHeader(
-                    if (mode == 0) pageVerses.firstOrNull()?.surahName ?: "Mushaf Madinah" else selected!!.name,
-                    night, onToggleNight, ::backToIndex
-                )
-                Row(Modifier.fillMaxWidth()) {
-                    listOf("Read Arabic", "Translation").forEachIndexed { index, label ->
-                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            TextButton(onClick = {
-                                mode = index
-                                preferences.edit { putInt("mode", index) }
-                            }, modifier = Modifier.fillMaxWidth()) {
-                                Text(label, color = if (mode == index) MaterialTheme.colorScheme.onSurface else Color.Gray)
+                val showControls = mode != 0 || chromeVisible || chapterError != null
+                AnimatedVisibility(
+                    visible = showControls,
+                    enter = slideInVertically(animationSpec = tween(220)) { -it } + fadeIn(tween(220)),
+                    exit = slideOutVertically(animationSpec = tween(220)) { -it } + fadeOut(tween(220))
+                ) {
+                    Column {
+                        ReaderHeader(
+                            if (mode == 0) pageVerses.firstOrNull()?.surahName ?: "Mushaf Madinah" else selected!!.name,
+                            night, onToggleNight, ::backToIndex
+                        )
+                        Row(Modifier.fillMaxWidth()) {
+                            listOf("Read Arabic", "Translation").forEachIndexed { index, label ->
+                                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    TextButton(onClick = {
+                                        mode = index
+                                        if (index == 0) chromeVisible = false
+                                        preferences.edit { putInt("mode", index) }
+                                    }, modifier = Modifier.fillMaxWidth()) {
+                                        Text(label, color = if (mode == index) MaterialTheme.colorScheme.onSurface else Color.Gray)
+                                    }
+                                    HorizontalDivider(
+                                        Modifier.padding(horizontal = 22.dp),
+                                        thickness = 2.dp,
+                                        color = if (mode == index) Brand else Color.Transparent
+                                    )
+                                }
                             }
-                            HorizontalDivider(
-                                Modifier.padding(horizontal = 22.dp),
-                                thickness = 2.dp,
-                                color = if (mode == index) Brand else Color.Transparent
-                            )
+                        }
+                        if (mode == 1) TranslationSelector(language) { next ->
+                            language = next
+                            preferences.edit { putInt("translation_language", next) }
                         }
                     }
-                }
-                if (mode == 1) TranslationSelector(language) { next ->
-                    language = next
-                    preferences.edit { putInt("translation_language", next) }
                 }
                 if (chapterError != null) Failure(chapterError!!) { chapterRetry++ }
                 else if (chapter == null) Loading()
@@ -362,9 +380,11 @@ private fun QuranApp(
                         MushafPage(
                             currentPage, pageVerses, night, hitMap,
                             selectedAyah = focusedAyah?.let { VerseReference(selected!!.number, it.number) },
+                            chromeVisible = chromeVisible,
+                            onToggleControls = { chromeVisible = !chromeVisible },
                             onPrevious = { if (currentPage > 1) currentPage-- },
                             onNext = { if (currentPage < 604) currentPage++ },
-                            onTapAt = { x, y, width, height ->
+                            onLongPressAt = { x, y, width, height ->
                                 hitMap.verseAt(currentPage, x, y, width, height)
                                     ?.let(::openPageAyah)
                             },
@@ -391,33 +411,41 @@ private fun QuranApp(
                             }
                         }
                     }
-                    ReciterSelector(reciter) { next ->
-                        player.stop()
-                        currentVerse = -1
-                        reciter = next
-                        preferences.edit { putString("reciter", next.edition) }
-                    }
-                    if (audioError != null) {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(audioError!!, Modifier.weight(1f), color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-                            TextButton(onClick = { audioRetry++ }) { Text("Retry") }
-                        }
-                    }
-                    PlayerBar(
-                        player, currentVerse, verses.size,
-                        audioUrls.isEmpty() && audioError == null, night,
-                        onPrevious = { startVerse((currentVerse - 1).coerceAtLeast(0)) },
-                        onNext = { startVerse((currentVerse + 1).coerceAtMost(verses.lastIndex)) },
-                        onToggle = {
-                            if (currentVerse < 0 || player.error != null) {
-                                if (mode == 0) {
-                                    verses.firstOrNull { it.page == currentPage }
-                                        ?.let { startVerse(it.number - 1) }
-                                } else startVerse(startAyah - 1)
+                    AnimatedVisibility(
+                        visible = showControls,
+                        enter = slideInVertically(animationSpec = tween(220)) { it } + fadeIn(tween(220)),
+                        exit = slideOutVertically(animationSpec = tween(220)) { it } + fadeOut(tween(220))
+                    ) {
+                        Column {
+                            ReciterSelector(reciter) { next ->
+                                player.stop()
+                                currentVerse = -1
+                                reciter = next
+                                preferences.edit { putString("reciter", next.edition) }
                             }
-                            else player.toggle()
+                            if (audioError != null) {
+                                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(audioError!!, Modifier.weight(1f), color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                                    TextButton(onClick = { audioRetry++ }) { Text("Retry") }
+                                }
+                            }
+                            PlayerBar(
+                                player, currentVerse, verses.size,
+                                audioUrls.isEmpty() && audioError == null, night,
+                                onPrevious = { startVerse((currentVerse - 1).coerceAtLeast(0)) },
+                                onNext = { startVerse((currentVerse + 1).coerceAtMost(verses.lastIndex)) },
+                                onToggle = {
+                                    if (currentVerse < 0 || player.error != null) {
+                                        if (mode == 0) {
+                                            verses.firstOrNull { it.page == currentPage }
+                                                ?.let { startVerse(it.number - 1) }
+                                        } else startVerse(startAyah - 1)
+                                    }
+                                    else player.toggle()
+                                }
+                            )
                         }
-                    )
+                    }
                 }
             }
         }
@@ -620,8 +648,9 @@ private fun ReaderHeader(title: String, night: Boolean, toggleNight: () -> Unit,
 private fun MushafPage(
     page: Int, verses: List<PageVerse>, night: Boolean,
     hitMap: MushafHitMap, selectedAyah: VerseReference?,
+    chromeVisible: Boolean, onToggleControls: () -> Unit,
     onPrevious: () -> Unit, onNext: () -> Unit,
-    onTapAt: (Float, Float, Int, Int) -> Unit,
+    onLongPressAt: (Float, Float, Int, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -633,7 +662,8 @@ private fun MushafPage(
     val pageColor = if (night) CardsBlack else Paper
     val pageText = if (night) TextWhite else Ink
     val swipeThreshold = with(LocalDensity.current) { 64.dp.toPx() }
-    val latestTapAt by rememberUpdatedState(onTapAt)
+    val latestLongPressAt by rememberUpdatedState(onLongPressAt)
+    val latestToggleControls by rememberUpdatedState(onToggleControls)
     val highlightAreas = remember(page, selectedAyah, image.width, image.height) {
         selectedAyah?.let { hitMap.areasFor(page, it, image.width, image.height) }
             ?: emptyList()
@@ -668,14 +698,20 @@ private fun MushafPage(
                 )
             }.padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(verses.firstOrNull()?.surahName ?: "Page $page", color = pageText, fontSize = 13.sp)
-                Text(verses.firstOrNull()?.let { "Juz ${it.juz}" } ?: "", color = pageText, fontSize = 13.sp)
+            AnimatedVisibility(
+                visible = chromeVisible,
+                enter = slideInVertically(animationSpec = tween(220)) { -it } + fadeIn(tween(220)),
+                exit = slideOutVertically(animationSpec = tween(220)) { -it } + fadeOut(tween(220))
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(verses.firstOrNull()?.surahName ?: "Page $page", color = pageText, fontSize = 13.sp)
+                    Text(verses.firstOrNull()?.let { "Juz ${it.juz}" } ?: "", color = pageText, fontSize = 13.sp)
+                }
             }
             Box(
                 Modifier.fillMaxWidth().weight(1f)
                     .semantics {
-                        contentDescription = "Mushaf Madinah Hafs page $page. Tap an ayah to select it. Swipe right for the next page or left for the previous page."
+                        contentDescription = "Mushaf Madinah Hafs page $page. Tap to show or hide reading controls. Long press an ayah to select it. Swipe right for the next page or left for the previous page."
                         customActions = listOf(
                             CustomAccessibilityAction("Next page") {
                                 if (page < 604) { onNext(); true } else false
@@ -686,19 +722,22 @@ private fun MushafPage(
                         )
                     }
                     .pointerInput(page, image.width, image.height) {
-                        detectTapGestures { tap ->
-                            val scale = minOf(
-                                size.width.toFloat() / image.width,
-                                size.height.toFloat() / image.height
-                            )
-                            val left = (size.width - image.width * scale) / 2f
-                            val top = (size.height - image.height * scale) / 2f
-                            val x = (tap.x - left) / scale
-                            val y = (tap.y - top) / scale
-                            if (x in 0f..image.width.toFloat() &&
-                                y in 0f..image.height.toFloat()
-                            ) latestTapAt(x, y, image.width, image.height)
-                        }
+                        detectTapGestures(
+                            onTap = { latestToggleControls() },
+                            onLongPress = { tap ->
+                                val scale = minOf(
+                                    size.width.toFloat() / image.width,
+                                    size.height.toFloat() / image.height
+                                )
+                                val left = (size.width - image.width * scale) / 2f
+                                val top = (size.height - image.height * scale) / 2f
+                                val x = (tap.x - left) / scale
+                                val y = (tap.y - top) / scale
+                                if (x in 0f..image.width.toFloat() &&
+                                    y in 0f..image.height.toFloat()
+                                ) latestLongPressAt(x, y, image.width, image.height)
+                            }
+                        )
                     }
             ) {
                 Image(
