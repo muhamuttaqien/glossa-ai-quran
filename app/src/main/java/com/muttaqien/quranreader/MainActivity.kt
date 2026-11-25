@@ -77,6 +77,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -84,6 +85,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -484,26 +486,47 @@ private fun QuranApp(
 
     val ayah = focusedAyah
     if (ayah != null && selected != null) {
-        ModalBottomSheet(onDismissRequest = { focusedAyah = null }) {
+        ModalBottomSheet(
+            onDismissRequest = { focusedAyah = null },
+            shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
+        ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
                 Text("${selected!!.name} • ${selected!!.number}:${ayah.number}", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(12.dp))
                 TranslationContent(ayah, language)
                 Spacer(Modifier.height(12.dp))
                 val isBookmarked = "${selected!!.number}:${ayah.number}" in bookmarks
-                Row {
-                    TextButton(onClick = { focusedAyah = null; startVerse(ayah.number - 1) }, enabled = audioUrls.containsKey(ayah.number)) {
-                        Text("Listen")
-                    }
-                    TextButton(
-                        onClick = { toggleBookmark(selected!!.number, ayah.number) },
-                        modifier = Modifier.semantics {
+                val audioReady = audioUrls.containsKey(ayah.number)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Listen",
+                        Modifier.clickable(enabled = audioReady, role = Role.Button) {
+                            focusedAyah = null
+                            startVerse(ayah.number - 1)
+                        }.padding(vertical = 12.dp),
+                        color = if (audioReady) MaterialTheme.colorScheme.primary else Color.Gray,
+                        textDecoration = TextDecoration.None
+                    )
+                    Text(
+                        "Bookmark",
+                        Modifier.semantics {
                             stateDescription = if (isBookmarked) "Bookmarked" else "Not bookmarked"
-                        }
-                    ) {
-                        Text("Bookmark", color = if (isBookmarked) Gold else MaterialTheme.colorScheme.primary)
-                    }
-                    TextButton(onClick = { shareAyah(ayah) }) { Text("Share") }
+                        }.clickable(role = Role.Button) {
+                            toggleBookmark(selected!!.number, ayah.number)
+                        }.padding(vertical = 12.dp),
+                        color = if (isBookmarked) Gold else MaterialTheme.colorScheme.primary,
+                        textDecoration = TextDecoration.None
+                    )
+                    Text(
+                        "Share",
+                        Modifier.clickable(role = Role.Button) { shareAyah(ayah) }
+                            .padding(vertical = 12.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        textDecoration = TextDecoration.None
+                    )
                 }
                 Text("Translation: ${chapter?.let { translationCredits(it, language) }.orEmpty()}", color = Color.Gray, fontSize = 12.sp)
                 Spacer(Modifier.height(24.dp))
