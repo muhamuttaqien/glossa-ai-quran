@@ -17,6 +17,20 @@ class MushafHitMap(private val context: Context) {
             JSONObject(it.readText())
         }
     }
+    private val versePages: Map<VerseReference, Int> by lazy {
+        buildMap {
+            for (page in 1..604) {
+                val bounds = pages.optJSONArray(page.toString()) ?: continue
+                for (index in 0 until bounds.length()) {
+                    val box = bounds.getJSONArray(index)
+                    val reference = VerseReference(box.getInt(1), box.getInt(2))
+                    if (reference !in this) put(reference, page)
+                }
+            }
+        }
+    }
+
+    fun pageFor(reference: VerseReference): Int? = versePages[reference]
 
     fun firstVerseOn(page: Int): VerseReference? {
         val bounds = pages.optJSONArray(page.toString()) ?: return null
