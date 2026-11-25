@@ -8,8 +8,8 @@ import kotlin.math.abs
 /**
  * Hit boxes for the bundled Madinah Mushaf images. The source coordinates are
  * adapted from GitCreativeCode/quran-ayah-coords (CC BY-SA 4.0); see the
- * attribution beside ayah_bounds.json. A tap near a verse boundary returns null
- * so the reader can fall back to the page's verse list.
+ * attribution beside ayah_bounds.json. A long press near a verse boundary
+ * returns null, leaving the page unchanged.
  */
 class MushafHitMap(private val context: Context) {
     private val pages: JSONObject by lazy {
@@ -51,8 +51,8 @@ class MushafHitMap(private val context: Context) {
         val reference = match ?: return null
 
         // Source and bundled images differ slightly at mid-line verse endings.
-        // Treat taps close to another verse's box as ambiguous instead of
-        // opening the wrong ayah. Those taps use the existing verse picker.
+        // Treat presses close to another verse's box as ambiguous instead of
+        // opening the wrong ayah.
         val boundaryMargin = 40f * 940f / width
         for (index in 0 until bounds.length()) {
             val box = bounds.getJSONArray(index)

@@ -654,19 +654,21 @@ private fun MushafPage(
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val image = remember(page) {
+    val bitmap = remember(page) {
         context.assets.open("mushaf/$page.png").use { stream ->
-            BitmapFactory.decodeStream(stream).asImageBitmap()
+            BitmapFactory.decodeStream(stream)
         }
     }
+    val image = remember(bitmap) { bitmap.asImageBitmap() }
     val pageColor = if (night) CardsBlack else Paper
     val pageText = if (night) TextWhite else Ink
     val swipeThreshold = with(LocalDensity.current) { 64.dp.toPx() }
     val latestLongPressAt by rememberUpdatedState(onLongPressAt)
     val latestToggleControls by rememberUpdatedState(onToggleControls)
-    val highlightAreas = remember(page, selectedAyah, image.width, image.height) {
-        selectedAyah?.let { hitMap.areasFor(page, it, image.width, image.height) }
-            ?: emptyList()
+    val highlight = remember(page, selectedAyah, bitmap) {
+        selectedAyah?.let { hitMap.areasFor(page, it, bitmap.width, bitmap.height) }
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { MushafHighlight.create(bitmap, it) }
     }
     // Keep the fixed page layout and glyphs; only remap its luminance for night reading.
     val nightFilter = remember {
@@ -751,26 +753,13 @@ private fun MushafPage(
                     contentScale = ContentScale.Fit,
                     colorFilter = if (night) nightFilter else null
                 )
-                if (highlightAreas.isNotEmpty()) {
-                    Canvas(Modifier.matchParentSize()) {
-                        val scale = minOf(size.width / image.width, size.height / image.height)
-                        val left = (size.width - image.width * scale) / 2f
-                        val top = (size.height - image.height * scale) / 2f
-                        highlightAreas.forEach { area ->
-                            val x = left + (area.left + 2f) * scale
-                            val y = top + (area.top + 1f) * scale
-                            val width = (area.width() - 4f) * scale
-                            val height = (area.height() - 2f) * scale
-                            if (width > 0f && height > 0f) {
-                                drawRoundRect(
-                                    color = Gold.copy(alpha = if (night) 0.24f else 0.18f),
-                                    topLeft = Offset(x, y),
-                                    size = Size(width, height),
-                                    cornerRadius = CornerRadius(3.dp.toPx())
-                                )
-                            }
-                        }
-                    }
+                if (highlight != null) {
+                    Image(
+                        bitmap = highlight,
+                        contentDescription = null,
+                        modifier = Modifier.matchParentSize(),
+                        contentScale = ContentScale.Fit
+                    )
                 }
             }
             Text(
