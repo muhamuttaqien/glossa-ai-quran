@@ -1,6 +1,7 @@
 package com.muttaqien.quranreader
 
 import android.content.Context
+import android.graphics.RectF
 import org.json.JSONObject
 import kotlin.math.abs
 
@@ -64,4 +65,29 @@ class MushafHitMap(private val context: Context) {
         }
         return reference
     }
+
+    /** Image-pixel rectangles for a selected ayah; no artwork is modified. */
+    fun areasFor(page: Int, reference: VerseReference, width: Int, height: Int): List<RectF> {
+        if (page !in 1..604 || width <= 0 || height <= 0 ||
+            (page <= 2 && (width != 442 || height != 645))
+        ) return emptyList()
+        val bounds = pages.optJSONArray(page.toString()) ?: return emptyList()
+        val areas = mutableListOf<RectF>()
+        for (index in 0 until bounds.length()) {
+            val box = bounds.getJSONArray(index)
+            if (box.getInt(1) != reference.surah || box.getInt(2) != reference.ayah) continue
+            val left = ((box.getInt(3) - 54f) * width / 940f).coerceIn(0f, width.toFloat())
+            val right = ((box.getInt(4) - 54f) * width / 940f).coerceIn(0f, width.toFloat())
+            val top = imageY(page, box.getInt(5).toFloat(), height).coerceIn(0f, height.toFloat())
+            val bottom = imageY(page, box.getInt(6).toFloat(), height).coerceIn(0f, height.toFloat())
+            if (right > left && bottom > top) {
+                areas.add(RectF(left, top, right, bottom))
+            }
+        }
+        return areas
+    }
+
+    private fun imageY(page: Int, sourceY: Float, height: Int): Float =
+        if (page <= 2) (200f + (sourceY - 125f) * 245f / 589f) * height / 645f
+        else (sourceY - 24f) * height / 1590f
 }
