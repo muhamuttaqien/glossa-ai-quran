@@ -484,7 +484,10 @@ private fun QuranApp(
 
     val ayah = focusedAyah
     if (ayah != null && selected != null) {
-        ModalBottomSheet(onDismissRequest = { focusedAyah = null }) {
+        ModalBottomSheet(
+            onDismissRequest = { focusedAyah = null },
+            shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
+        ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
                 Text("${selected!!.name} • ${selected!!.number}:${ayah.number}", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(12.dp))
