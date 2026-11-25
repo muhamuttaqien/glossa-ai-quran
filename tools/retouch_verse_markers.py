@@ -1,4 +1,4 @@
-"""Remove detached original-ornament fragments from `-new.png` Mushaf pages.
+"""Remove detached original-ornament fragments from numbered PNG Mushaf pages.
 
 Supply the unmodified source artwork from Git commit aca71eb and the current
 asset directory. Only pages whose marker pixels change are rewritten.
@@ -19,7 +19,7 @@ def main(source: Path, target: Path):
     updated_pages = updated_pixels = markers = 0
     for page in range(1, 605):
         original = np.asarray(Image.open(source / f"{page}.png").convert("RGBA"))
-        existing = np.asarray(Image.open(target / f"{page}-new.png").convert("RGBA"))
+        existing = np.asarray(Image.open(target / f"{page}.png").convert("RGBA"))
         if original.shape != existing.shape:
             raise ValueError(f"Unexpected dimensions on page {page}")
         result = existing.copy()
@@ -34,7 +34,7 @@ def main(source: Path, target: Path):
         # the simplified ring; the verse text, numerals, and rings stay put.
         if np.any(result[changed, 3] != 0) or np.any(existing[changed, 3] == 0):
             raise ValueError(f"Unexpected non-fragment change on page {page}")
-        save_exact_palette(result, target / f"{page}-new.png")
+        save_exact_palette(result, target / f"{page}.png")
         updated_pages += 1
         updated_pixels += int(np.count_nonzero(changed))
     if markers != 6236:

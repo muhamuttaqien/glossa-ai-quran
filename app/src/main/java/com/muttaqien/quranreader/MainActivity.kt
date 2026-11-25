@@ -869,7 +869,7 @@ private fun MushafPage(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val bitmap = remember(page) {
-        context.assets.open("mushaf/$page-new.png").use { stream ->
+        context.assets.open("mushaf/$page.png").use { stream ->
             BitmapFactory.decodeStream(stream)
         }
     }
@@ -878,13 +878,13 @@ private fun MushafPage(
     }
     val image = remember(displayBitmap) { displayBitmap.asImageBitmap() }
     val previousImage = remember(page, night) {
-        if (page > 1) context.assets.open("mushaf/${page - 1}-new.png").use { stream ->
+        if (page > 1) context.assets.open("mushaf/${page - 1}.png").use { stream ->
             val bitmap = BitmapFactory.decodeStream(stream)
             (if (night) MushafNightPalette.convert(bitmap) else bitmap).asImageBitmap()
         } else null
     }
     val nextImage = remember(page, night) {
-        if (page < 604) context.assets.open("mushaf/${page + 1}-new.png").use { stream ->
+        if (page < 604) context.assets.open("mushaf/${page + 1}.png").use { stream ->
             val bitmap = BitmapFactory.decodeStream(stream)
             (if (night) MushafNightPalette.convert(bitmap) else bitmap).asImageBitmap()
         } else null
