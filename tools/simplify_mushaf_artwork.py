@@ -132,6 +132,12 @@ def build_page(original, page):
     markers = marker_centers(original, page)
     if page <= 2:
         text_mask, _, _ = opening_page(original, page)
+        if page == 1:
+            # Two isolated frame flecks at the first text band's corners.
+            # They are outside the Arabic verse and verse-number circle.
+            text_mask[200, 140] = False
+            text_mask[200, 301] = False
+            text_mask[201, 301] = False
         output = np.zeros_like(original)
         output[text_mask] = original[text_mask]
         bands = [(112, 170)]
