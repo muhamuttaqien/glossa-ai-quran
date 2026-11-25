@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
@@ -59,8 +60,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -69,11 +72,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
@@ -90,6 +96,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import android.graphics.BitmapFactory
 import kotlin.math.cos
 import kotlin.math.sin
@@ -733,8 +740,38 @@ private fun MushafPage(
         if (night) MushafNightPalette.convert(bitmap) else bitmap
     }
     val image = remember(displayBitmap) { displayBitmap.asImageBitmap() }
+    val previousImage = remember(page, night) {
+        if (page > 1) context.assets.open("mushaf/${page - 1}.png").use { stream ->
+            val bitmap = BitmapFactory.decodeStream(stream)
+            (if (night) MushafNightPalette.convert(bitmap) else bitmap).asImageBitmap()
+        } else null
+    }
+    val nextImage = remember(page, night) {
+        if (page < 604) context.assets.open("mushaf/${page + 1}.png").use { stream ->
+            val bitmap = BitmapFactory.decodeStream(stream)
+            (if (night) MushafNightPalette.convert(bitmap) else bitmap).asImageBitmap()
+        } else null
+    }
     val pageColor = if (night) CardsBlack else Paper
     val swipeThreshold = with(LocalDensity.current) { 64.dp.toPx() }
+    var pageWidth by remember { mutableIntStateOf(0) }
+    var dragOffset by remember(page) { mutableFloatStateOf(0f) }
+    var settling by remember(page) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    fun settle(target: Float) {
+        if (settling) return
+        settling = true
+        scope.launch {
+            val animation = Animatable(dragOffset)
+            animation.animateTo(target, tween(220)) { dragOffset = value }
+            when {
+                target > 0f -> onNext()
+                target < 0f -> onPrevious()
+            }
+            dragOffset = 0f
+            settling = false
+        }
+    }
     val latestLongPressAt by rememberUpdatedState(onLongPressAt)
     val latestToggleControls by rememberUpdatedState(onToggleControls)
     val highlightAreas = remember(page, selectedAyah, bitmap) {
@@ -743,80 +780,108 @@ private fun MushafPage(
             ?: emptyList()
     }
     Surface(modifier.fillMaxWidth().padding(vertical = 4.dp), color = pageColor) {
-        Column(
-            Modifier.fillMaxSize().pointerInput(page, swipeThreshold) {
-                var totalDrag = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { totalDrag = 0f },
-                    onDragEnd = {
-                        when {
-                            totalDrag >= swipeThreshold -> onNext()
-                            totalDrag <= -swipeThreshold -> onPrevious()
-                        }
-                        totalDrag = 0f
-                    },
-                    onDragCancel = { totalDrag = 0f },
-                    onHorizontalDrag = { change, dragAmount ->
-                        totalDrag += dragAmount
-                        change.consume()
-                    }
-                )
-            }.padding(horizontal = 14.dp, vertical = 8.dp)
-        ) {
-            Box(
-                Modifier.fillMaxWidth().weight(1f)
-                    .semantics {
-                        contentDescription = "Mushaf Madinah Hafs page $page. Tap to show or hide reading controls. Long press an ayah to select it. Swipe right for the next page or left for the previous page."
-                        customActions = listOf(
-                            CustomAccessibilityAction(if (chromeVisible) "Hide reading controls" else "Show reading controls") {
-                                onToggleControls()
-                                true
-                            },
-                            CustomAccessibilityAction("Next page") {
-                                if (page < 604) { onNext(); true } else false
-                            },
-                            CustomAccessibilityAction("Previous page") {
-                                if (page > 1) { onPrevious(); true } else false
+        Box(
+            Modifier.fillMaxSize().clipToBounds().onSizeChanged { pageWidth = it.width }
+                .pointerInput(page, swipeThreshold, pageWidth) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            val target = when {
+                                dragOffset >= swipeThreshold && page < 604 -> pageWidth.toFloat()
+                                dragOffset <= -swipeThreshold && page > 1 -> -pageWidth.toFloat()
+                                else -> 0f
                             }
-                        )
-                    }
-                    .pointerInput(page, image.width, image.height) {
-                        detectTapGestures(
-                            onTap = { latestToggleControls() },
-                            onLongPress = { tap ->
-                                val scale = minOf(
-                                    size.width.toFloat() / image.width,
-                                    size.height.toFloat() / image.height
+                            settle(target)
+                        },
+                        onDragCancel = { settle(0f) },
+                        onHorizontalDrag = { change, dragAmount ->
+                            if (!settling) {
+                                dragOffset = (dragOffset + dragAmount).coerceIn(
+                                    if (page > 1) -pageWidth.toFloat() else 0f,
+                                    if (page < 604) pageWidth.toFloat() else 0f
                                 )
-                                val left = (size.width - image.width * scale) / 2f
-                                val top = (size.height - image.height * scale) / 2f
-                                val x = (tap.x - left) / scale
-                                val y = (tap.y - top) / scale
-                                if (x in 0f..image.width.toFloat() &&
-                                    y in 0f..image.height.toFloat()
-                                ) latestLongPressAt(x, y, image.width, image.height)
                             }
-                        )
-                    }
-            ) {
+                            change.consume()
+                        }
+                    )
+            }
+        ) {
+            if (dragOffset > 0f && nextImage != null) {
                 Image(
-                    bitmap = image,
-                    contentDescription = null,
-                    modifier = Modifier.matchParentSize(),
+                    bitmap = nextImage, contentDescription = null,
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        translationX = dragOffset - pageWidth
+                    }.padding(horizontal = 14.dp, vertical = 8.dp),
                     contentScale = ContentScale.Fit
                 )
-                if (highlightAreas.isNotEmpty()) {
-                    Canvas(Modifier.matchParentSize()) {
-                        val scale = minOf(size.width / image.width, size.height / image.height)
-                        val left = (size.width - image.width * scale) / 2f
-                        val top = (size.height - image.height * scale) / 2f
-                        highlightAreas.forEach { area ->
-                            drawRoundRect(
-                                color = if (night) Color.White.copy(alpha = 0.24f) else Color.Black.copy(alpha = 0.10f),
-                                topLeft = Offset(left + area.left * scale, top + area.top * scale),
-                                size = Size(area.width() * scale, area.height() * scale),
-                                cornerRadius = CornerRadius(3.dp.toPx())
+            }
+            if (dragOffset < 0f && previousImage != null) {
+                Image(
+                    bitmap = previousImage, contentDescription = null,
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        translationX = dragOffset + pageWidth
+                    }.padding(horizontal = 14.dp, vertical = 8.dp),
+                    contentScale = ContentScale.Fit
+                )
+            }
+            Column(
+                Modifier.fillMaxSize().graphicsLayer { translationX = dragOffset }
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+            ) {
+                Box(
+                    Modifier.fillMaxWidth().weight(1f)
+                        .semantics {
+                            contentDescription = "Mushaf Madinah Hafs page $page. Tap to show or hide reading controls. Long press an ayah to select it. Swipe right for the next page or left for the previous page."
+                            customActions = listOf(
+                                CustomAccessibilityAction(if (chromeVisible) "Hide reading controls" else "Show reading controls") {
+                                    onToggleControls()
+                                    true
+                                },
+                                CustomAccessibilityAction("Next page") {
+                                    if (page < 604) { onNext(); true } else false
+                                },
+                                CustomAccessibilityAction("Previous page") {
+                                    if (page > 1) { onPrevious(); true } else false
+                                }
                             )
+                        }
+                        .pointerInput(page, image.width, image.height) {
+                            detectTapGestures(
+                                onTap = { latestToggleControls() },
+                                onLongPress = { tap ->
+                                    val scale = minOf(
+                                        size.width.toFloat() / image.width,
+                                        size.height.toFloat() / image.height
+                                    )
+                                    val left = (size.width - image.width * scale) / 2f
+                                    val top = (size.height - image.height * scale) / 2f
+                                    val x = (tap.x - left) / scale
+                                    val y = (tap.y - top) / scale
+                                    if (x in 0f..image.width.toFloat() &&
+                                        y in 0f..image.height.toFloat()
+                                    ) latestLongPressAt(x, y, image.width, image.height)
+                                }
+                            )
+                        }
+                ) {
+                    Image(
+                        bitmap = image,
+                        contentDescription = null,
+                        modifier = Modifier.matchParentSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                    if (highlightAreas.isNotEmpty()) {
+                        Canvas(Modifier.matchParentSize()) {
+                            val scale = minOf(size.width / image.width, size.height / image.height)
+                            val left = (size.width - image.width * scale) / 2f
+                            val top = (size.height - image.height * scale) / 2f
+                            highlightAreas.forEach { area ->
+                                drawRoundRect(
+                                    color = if (night) Color.White.copy(alpha = 0.24f) else Color.Black.copy(alpha = 0.10f),
+                                    topLeft = Offset(left + area.left * scale, top + area.top * scale),
+                                    size = Size(area.width() * scale, area.height() * scale),
+                                    cornerRadius = CornerRadius(3.dp.toPx())
+                                )
+                            }
                         }
                     }
                 }
