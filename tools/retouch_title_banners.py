@@ -14,13 +14,15 @@ from PIL import Image
 from simplify_mushaf_artwork import RED, draw_banner
 from style_mushaf_frames import save_exact_palette
 
+SOURCE_REDS = ((196, 107, 107, 255), RED)
+
 
 def retouch(source, target):
     count = pages = 0
     target.mkdir(parents=True, exist_ok=True)
     for page in range(1, 605):
         image = np.asarray(Image.open(source / f"{page}.png").convert("RGBA"))
-        red = np.all(image == RED, axis=2)
+        red = np.logical_or.reduce([np.all(image == color, axis=2) for color in SOURCE_REDS])
         lines = np.flatnonzero(red.sum(axis=1) > image.shape[1] * .65)
         if len(lines) % 2:
             raise ValueError(f"Page {page}: unmatched border line: {lines}")
@@ -33,7 +35,9 @@ def retouch(source, target):
                 raise ValueError(f"Page {page}: unexpected banner size {top}:{bottom}")
             y1, y2 = top - 5, bottom + 5
             region = output[y1:y2 + 1]
-            ornament = np.all(region[:, :, :3] == RED[:3], axis=2) & (region[:, :, 3] > 0)
+            ornament = np.logical_or.reduce([
+                np.all(region[:, :, :3] == color[:3], axis=2) for color in SOURCE_REDS
+            ]) & (region[:, :, 3] > 0)
             region[ornament] = (0, 0, 0, 0)
             art = draw_banner(image.shape[1], image.shape[0], y1, y2)
             painted = art[:, :, 3] > 0

@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw
 from style_mushaf_frames import opening_page, save_exact_palette, title_bands
 
 
-RED = (196, 107, 107, 255)  # #C46B6B; the app maps this to #B87575 at night.
+RED = (239, 77, 77, 255)  # Glossa red #EF4D4D in both reading modes.
 MOTIF = Image.open(
     Path(__file__).resolve().parent.parent / "design/surah-title-floral-mask.png"
 ).convert("RGBA")
@@ -95,7 +95,10 @@ def title_ink(original, page, y1, y2):
         mask[46, 179:181] = False  # A separate crest fleck, not a letter.
         shift = y1 + 15 - 47
     else:
-        mask[y1 + 10:y2 - 8, w // 2 - 85:w // 2 + 85] = True
+        # The source title reaches row +7 on tall lettering and descenders
+        # can reach the lower edge at y2-7. The printed frame occupies the
+        # rows beyond this range and the side columns outside +/-73.
+        mask[y1 + 7:y2 - 6, w // 2 - 73:w // 2 + 73] = True
         shift = 0
     mask &= (luma < 205) & (original[:, :, 3] > 0)
     return mask, shift
