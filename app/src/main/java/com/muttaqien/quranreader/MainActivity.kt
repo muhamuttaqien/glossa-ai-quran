@@ -87,6 +87,8 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -110,6 +112,7 @@ private val Paper = Color(0xFFFFFEFA)
 private val Ink = Color(0xFF222423)
 private val Gold = Color(0xFFB89A65)
 private val ArabicBlack = Color(0xFF080808)
+private val QuranArabicFont = FontFamily(Font(R.font.qpc_hafs_v22))
 private val LightLine = Color(0xFFE6E4DC)
 private val ReaderChromeScheme = darkColorScheme(
     primary = Brand, onPrimary = TextWhite,
@@ -483,7 +486,7 @@ private fun QuranApp(
                             }
                             item {
                                 Text(
-                                    "Text: AlQuran Cloud • Translation: ${translationCredits(chapter!!, language)}",
+                                    "Arabic: King Fahd Qur'an Printing Complex (Hafs v22) • Translation: ${translationCredits(chapter!!, language)}",
                                     Modifier.fillMaxWidth().padding(20.dp),
                                     color = Color.Gray, fontSize = 12.sp, textAlign = TextAlign.Center
                                 )
@@ -966,7 +969,13 @@ private fun AyahCard(
         border = BorderStroke(1.dp, if (night) Color(0xFF303030) else LightLine),
         colors = CardDefaults.cardColors(containerColor = if (night) CardsBlack else Paper)
     ) {
-        Column(Modifier.fillMaxWidth().clickable(onClick = read).padding(20.dp)) {
+        Column(
+            Modifier.fillMaxWidth().clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = read
+            ).padding(20.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Ayah ${ayah.number}", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
                 Box {
@@ -999,7 +1008,7 @@ private fun AyahCard(
                 ayah.arabic, Modifier.fillMaxWidth().padding(vertical = 10.dp),
                 color = if (night) TextWhite else ArabicBlack,
                 textAlign = TextAlign.Right, fontSize = 29.sp, lineHeight = 53.sp,
-                style = TextStyle(textDirection = TextDirection.Rtl)
+                style = TextStyle(textDirection = TextDirection.Rtl, fontFamily = QuranArabicFont)
             )
             HorizontalDivider()
             Spacer(Modifier.height(12.dp))

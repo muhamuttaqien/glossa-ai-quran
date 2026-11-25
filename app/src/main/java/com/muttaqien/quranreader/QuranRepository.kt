@@ -7,6 +7,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.zip.GZIPInputStream
 
 data class Surah(
     val number: Int,
@@ -42,8 +43,20 @@ data class Reciter(val label: String, val edition: String) {
     }
 }
 
-/** The API response is cached verbatim; the Uthmani text is never transformed. */
+/** API responses are cached verbatim; the bundled QPC Hafs text is never transformed. */
 class QuranRepository(private val context: Context) {
+    private val qpcHafsVerses: List<String> by lazy {
+        val records = GZIPInputStream(context.assets.open("qpc_hafs_v22.dat")).bufferedReader().use {
+            JSONArray(it.readText())
+        }
+        require(records.length() == 6236) { "Incomplete QPC Hafs text" }
+        (0 until records.length()).map { index ->
+            val entry = records.getJSONArray(index)
+            require(entry.length() == 2 && entry.getInt(1) == index + 1)
+            entry.getString(0).also { require(it.isNotBlank()) }
+        }
+    }
+
     suspend fun pageVerses(page: Int): List<PageVerse> = withContext(Dispatchers.IO) {
         require(page in 1..604)
         val ayahs = fetch("page/$page/quran-uthmani", "mushaf-page-$page.json")
@@ -97,7 +110,7 @@ class QuranRepository(private val context: Context) {
                 a.getInt("numberInSurah") == en.getInt("numberInSurah"))
             Ayah(
                 a.getInt("numberInSurah"), a.getInt("number"), a.getInt("page"), a.getInt("juz"),
-                a.getString("text"), id.getString("text"), en.getString("text")
+                qpcHafsVerses[a.getInt("number") - 1], id.getString("text"), en.getString("text")
             )
         }
         Chapter(
