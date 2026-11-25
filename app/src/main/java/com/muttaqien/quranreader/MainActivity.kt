@@ -695,10 +695,10 @@ private fun MushafPage(
     val swipeThreshold = with(LocalDensity.current) { 64.dp.toPx() }
     val latestLongPressAt by rememberUpdatedState(onLongPressAt)
     val latestToggleControls by rememberUpdatedState(onToggleControls)
-    val highlight = remember(page, selectedAyah, bitmap) {
+    val highlightAreas = remember(page, selectedAyah, bitmap) {
         selectedAyah?.let { hitMap.areasFor(page, it, bitmap.width, bitmap.height) }
-            ?.takeIf { it.isNotEmpty() }
-            ?.let { MushafHighlight.create(bitmap, it) }
+            ?.let { MushafHighlight.tighten(bitmap, it) }
+            ?: emptyList()
     }
     // Keep the fixed page layout and glyphs; only remap its luminance for night reading.
     val nightFilter = remember {
@@ -773,13 +773,20 @@ private fun MushafPage(
                     contentScale = ContentScale.Fit,
                     colorFilter = if (night) nightFilter else null
                 )
-                if (highlight != null) {
-                    Image(
-                        bitmap = highlight,
-                        contentDescription = null,
-                        modifier = Modifier.matchParentSize(),
-                        contentScale = ContentScale.Fit
-                    )
+                if (highlightAreas.isNotEmpty()) {
+                    Canvas(Modifier.matchParentSize()) {
+                        val scale = minOf(size.width / image.width, size.height / image.height)
+                        val left = (size.width - image.width * scale) / 2f
+                        val top = (size.height - image.height * scale) / 2f
+                        highlightAreas.forEach { area ->
+                            drawRoundRect(
+                                color = Color.White.copy(alpha = if (night) 0.24f else 0.18f),
+                                topLeft = Offset(left + area.left * scale, top + area.top * scale),
+                                size = Size(area.width() * scale, area.height() * scale),
+                                cornerRadius = CornerRadius(3.dp.toPx())
+                            )
+                        }
+                    }
                 }
             }
         }

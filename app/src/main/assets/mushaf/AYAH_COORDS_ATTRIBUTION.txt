@@ -19,5 +19,5 @@ The Qur'an page images and Arabic text were not changed.
 The interaction maps those coordinates to the bundled compact PNG images.
 Long presses close to a verse boundary do nothing because the source
 coordinate images and these compact PNGs are not pixel-identical.
-The white selection overlay follows dark printed pixels inside the mapped
-ayah segments and does not alter the page artwork.
+The white selection overlay draws rounded areas around the mapped ayah
+segments, tightened to their printed ink. It does not alter page artwork.
