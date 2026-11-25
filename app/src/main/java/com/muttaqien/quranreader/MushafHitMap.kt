@@ -55,7 +55,7 @@ class MushafHitMap(private val context: Context) {
         if (page !in 1..604 || width <= 0 || height <= 0 ||
             x !in 0f..width.toFloat() || y !in 0f..height.toFloat()
         ) return null
-        if (page == 3 && width == 1080 && height == 1440) {
+        if (page == 3 && width == 1000 && height == 1636) {
             return PageThreeHighResMap.verseAt(x, y)
         }
         // The opening pages have ornamental frames and a different text canvas.
@@ -107,7 +107,7 @@ class MushafHitMap(private val context: Context) {
         if (page !in 1..604 || width <= 0 || height <= 0 ||
             (page <= 2 && (width != 442 || height != 645))
         ) return emptyList()
-        if (page == 3 && width == 1080 && height == 1440) {
+        if (page == 3 && width == 1000 && height == 1636) {
             return PageThreeHighResMap.areasFor(reference)
         }
         val bounds = pages.optJSONArray(page.toString()) ?: return emptyList()
@@ -133,10 +133,20 @@ class MushafHitMap(private val context: Context) {
 
 /** The high-resolution source shifts verse endings relative to the 442 px pages. */
 internal object PageThreeHighResMap {
+    // The original 1080x1440 source is cropped by 40 px on each side. Fourteen
+    // transparent row gaps are inserted after these source y coordinates.
+    private val lineCuts = intArrayOf(
+        96, 189, 288, 384, 480, 576, 672, 768, 864, 960, 1056, 1152, 1249, 1344
+    )
+    private const val lineGap = 14
+
     private data class Segment(val line: Int, val ayah: Int, val left: Float, val right: Float) {
-        val top: Float get() = (12 + (line - 1) * 96).toFloat()
-        val bottom: Float get() = (minOf(1440, 108 + (line - 1) * 96)).toFloat()
-        fun rect() = RectF(left, top, right, bottom)
+        val top: Float get() = if (line == 1) 0f
+            else (PageThreeHighResMap.lineCuts[line - 2] + (line - 1) * lineGap).toFloat()
+        val bottom: Float get() = if (line == 15) 1636f
+            else (PageThreeHighResMap.lineCuts[line - 1] + (line - 1) * lineGap).toFloat()
+        fun rect() = RectF((left - 40f).coerceAtLeast(0f), top,
+            (right - 40f).coerceAtMost(1000f), bottom)
     }
 
     // Boundaries are the centers of the original printed verse markers. The
@@ -160,13 +170,15 @@ internal object PageThreeHighResMap {
     )
 
     fun verseAt(x: Float, y: Float): VerseReference? {
+        val sourceX = x + 40f
         val segment = segments.firstOrNull {
-            x >= it.left && x <= it.right && y >= it.top + 4f && y <= it.bottom - 4f
+            sourceX >= it.left && sourceX <= it.right &&
+                y >= it.top + 4f && y <= it.bottom - 4f
         } ?: return null
         // Avoid assigning a long press on a marker to the wrong adjacent ayah.
         if (segments.any {
                 it.line == segment.line && it.ayah != segment.ayah &&
-                    (abs(x - it.left) < 30f || abs(x - it.right) < 30f)
+                    (abs(sourceX - it.left) < 30f || abs(sourceX - it.right) < 30f)
             }) return null
         return VerseReference(2, segment.ayah)
     }
