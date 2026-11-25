@@ -19,6 +19,10 @@ from PIL import Image, ImageDraw
 
 SOURCE_SHA = "dc9425c28e93b0a82fb4a1c3dcec9ff1b1c69df9"
 RED = (239, 77, 77, 255)
+HORIZONTAL_CROP = (40, 1040)
+# Each cut lies on a fully transparent row between printed lines.
+LINE_CUTS = (96, 189, 288, 384, 480, 576, 672, 768, 864, 960, 1056, 1152, 1249, 1344)
+LINE_GAP = 14
 
 
 def build(source: Path, target: Path) -> list[tuple[int, int]]:
@@ -62,11 +66,28 @@ def build(source: Path, target: Path) -> list[tuple[int, int]]:
             raise ValueError(f"Printed numeral missing at ({cx}, {cy})")
         draw.ellipse((cx - 25, cy - 25, cx + 25, cy + 25), outline=RED, width=2)
         centers.append((cx, cy))
+    # Restore the compact PNG page's 1.64 portrait aspect without stretching
+    # any Arabic pixels: move intact line bands apart, then crop only clear
+    # horizontal margins. This gives 1000x1636 from a 1080x1440 source.
+    for cut in LINE_CUTS:
+        if np.any(np.array(result.getchannel("A"))[cut]):
+            raise ValueError(f"Line cut {cut} intersects printed ink")
+    x1, x2 = HORIZONTAL_CROP
+    if np.any(np.array(result.getchannel("A"))[:, :x1]) or np.any(
+        np.array(result.getchannel("A"))[:, x2:]
+    ):
+        raise ValueError("Horizontal crop intersects printed ink")
+    spaced = Image.new("RGBA", (x2 - x1, 1440 + len(LINE_CUTS) * LINE_GAP))
+    start = 0
+    for index, end in enumerate((*LINE_CUTS, 1440)):
+        spaced.paste(result.crop((x1, start, x2, end)), (0, start + index * LINE_GAP))
+        start = end
     target.parent.mkdir(parents=True, exist_ok=True)
-    result.save(target, optimize=True)
-    return centers
+    spaced.save(target, optimize=True)
+    return [(x - x1, y + sum(cut <= y for cut in LINE_CUTS) * LINE_GAP)
+            for x, y in centers]
 
 
 if __name__ == "__main__":
     centers = build(Path(sys.argv[1]), Path(sys.argv[2]))
-    print(f"Built page 3 at 1080x1440 with {len(centers)} red verse circles: {centers}")
+    print(f"Built page 3 at 1000x1636 with {len(centers)} red verse circles: {centers}")
