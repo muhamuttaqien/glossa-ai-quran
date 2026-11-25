@@ -947,7 +947,7 @@ private fun MushafPage(
                     bitmap = nextImage, contentDescription = null,
                     modifier = Modifier.fillMaxSize().graphicsLayer {
                         translationX = dragOffset - pageWidth
-                    }.padding(horizontal = 14.dp, vertical = 8.dp),
+                    }.padding(horizontal = if (page + 1 == 3) 8.dp else 14.dp, vertical = 8.dp),
                     contentScale = ContentScale.Fit,
                     filterQuality = FilterQuality.High
                 )
@@ -957,14 +957,14 @@ private fun MushafPage(
                     bitmap = previousImage, contentDescription = null,
                     modifier = Modifier.fillMaxSize().graphicsLayer {
                         translationX = dragOffset + pageWidth
-                    }.padding(horizontal = 14.dp, vertical = 8.dp),
+                    }.padding(horizontal = if (page - 1 == 3) 8.dp else 14.dp, vertical = 8.dp),
                     contentScale = ContentScale.Fit,
                     filterQuality = FilterQuality.High
                 )
             }
             Column(
                 Modifier.fillMaxSize().graphicsLayer { translationX = dragOffset }
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                    .padding(horizontal = if (page == 3) 8.dp else 14.dp, vertical = 8.dp)
             ) {
                 Box(
                     Modifier.fillMaxWidth().weight(1f)

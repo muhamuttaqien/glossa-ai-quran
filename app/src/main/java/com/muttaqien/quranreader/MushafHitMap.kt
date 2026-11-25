@@ -55,7 +55,7 @@ class MushafHitMap(private val context: Context) {
         if (page !in 1..604 || width <= 0 || height <= 0 ||
             x !in 0f..width.toFloat() || y !in 0f..height.toFloat()
         ) return null
-        if (page == 3 && width == 1000 && height == 1636) {
+        if (page == 3 && width == 1000 && height == 1902) {
             return PageThreeHighResMap.verseAt(x, y)
         }
         // The opening pages have ornamental frames and a different text canvas.
@@ -107,7 +107,7 @@ class MushafHitMap(private val context: Context) {
         if (page !in 1..604 || width <= 0 || height <= 0 ||
             (page <= 2 && (width != 442 || height != 645))
         ) return emptyList()
-        if (page == 3 && width == 1000 && height == 1636) {
+        if (page == 3 && width == 1000 && height == 1902) {
             return PageThreeHighResMap.areasFor(reference)
         }
         val bounds = pages.optJSONArray(page.toString()) ?: return emptyList()
@@ -138,12 +138,12 @@ internal object PageThreeHighResMap {
     private val lineCuts = intArrayOf(
         96, 189, 288, 384, 480, 576, 672, 768, 864, 960, 1056, 1152, 1249, 1344
     )
-    private const val lineGap = 14
+    private const val lineGap = 33
 
     private data class Segment(val line: Int, val ayah: Int, val left: Float, val right: Float) {
         val top: Float get() = if (line == 1) 0f
             else (PageThreeHighResMap.lineCuts[line - 2] + (line - 1) * lineGap).toFloat()
-        val bottom: Float get() = if (line == 15) 1636f
+        val bottom: Float get() = if (line == 15) 1902f
             else (PageThreeHighResMap.lineCuts[line - 1] + (line - 1) * lineGap).toFloat()
         fun rect() = RectF((left - 40f).coerceAtLeast(0f), top,
             (right - 40f).coerceAtMost(1000f), bottom)
