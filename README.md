@@ -9,7 +9,7 @@ Android reader with Uthmani Arabic text (Hafs), English and Indonesian translati
 - Save verse bookmarks, resume from the last selected or played verse or the last swiped Mushaf page, share a verse, and switch between light and dark reading. Each translation card keeps Listen, Bookmark, and Share in a compact actions menu. Light is the default.
 - Choose Mishary Rashid Alafasy, Mahmoud Khalil Al-Husary, Muhammad Siddiq Al-Minshawi, Abdul Rahman Al-Sudais, or Saud Al-Shuraim.
 - Listen to an ayah; playback advances through the rest of the surah. In Read Arabic, the current ayah follows the playback with the same mapped highlight used for verse selection; it remains highlighted while paused and clears when playback ends or stops. Previous, pause/resume and next controls are included.
-- All Arabic Mushaf pages and ayah hit boxes are bundled. A saved bookmark opens its Read Arabic page directly and highlights the selected ayah even while chapter details load. Previously opened surahs, page metadata, juz starting points and audio URL lists are cached; new translations, verse details and audio streams need internet. The selected qari and display mode are remembered.
+- All Arabic Mushaf pages and ayah hit boxes are bundled. Choosing a surah, juz, Continue reading, or bookmark from the index opens the corresponding page in Read Arabic; a bookmarked ayah is highlighted even while chapter details load. Previously opened surahs, page metadata, juz starting points and audio URL lists are cached; new translations, verse details and audio streams need internet. The selected qari and display mode are remembered.
 
 ## Preview
 
