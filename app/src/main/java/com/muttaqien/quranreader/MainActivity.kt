@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -59,8 +61,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -77,6 +81,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import kotlinx.coroutines.CancellationException
 import android.graphics.BitmapFactory
+import kotlin.math.cos
+import kotlin.math.sin
 
 private val Brand = Color(0xFFEF4D4D)
 private val Background = Color(0xFF080808)
@@ -565,7 +571,35 @@ private fun ReaderHeader(title: String, night: Boolean, toggleNight: () -> Unit,
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = back) { Text("‹ Back", color = TextWhite) }
             Text(title, Modifier.weight(1f), color = TextWhite, textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold)
-            TextButton(onClick = toggleNight) { Text(if (night) "☀" else "☾", color = TextWhite, fontSize = 22.sp) }
+            TextButton(
+                onClick = toggleNight,
+                modifier = Modifier.semantics {
+                    contentDescription = if (night) "Switch to light mode" else "Switch to dark mode"
+                }
+            ) {
+                if (night) {
+                    Canvas(Modifier.size(22.dp)) {
+                        val radius = size.minDimension
+                        drawCircle(color = TextWhite, radius = radius * 0.19f)
+                        for (index in 0 until 8) {
+                            val angle = index * Math.PI / 4
+                            val dx = cos(angle).toFloat()
+                            val dy = sin(angle).toFloat()
+                            val start = radius * 0.32f
+                            val end = radius * 0.46f
+                            drawLine(
+                                color = TextWhite,
+                                start = Offset(center.x + dx * start, center.y + dy * start),
+                                end = Offset(center.x + dx * end, center.y + dy * end),
+                                strokeWidth = 1.6f.dp.toPx(),
+                                cap = StrokeCap.Round
+                            )
+                        }
+                    }
+                } else {
+                    Text("☾", color = TextWhite, fontSize = 22.sp)
+                }
+            }
         }
     }
 }
