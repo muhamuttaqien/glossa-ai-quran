@@ -32,6 +32,18 @@ class MushafHitMap(private val context: Context) {
 
     fun pageFor(reference: VerseReference): Int? = versePages[reference]
 
+    /** Ayahs in their printed order, including pages shared by multiple surahs. */
+    fun versesOn(page: Int): List<VerseReference> {
+        val bounds = pages.optJSONArray(page.toString()) ?: return emptyList()
+        return buildList {
+            for (index in 0 until bounds.length()) {
+                val box = bounds.getJSONArray(index)
+                val reference = VerseReference(box.getInt(1), box.getInt(2))
+                if (reference != lastOrNull()) add(reference)
+            }
+        }
+    }
+
     fun firstVerseOn(page: Int): VerseReference? {
         val bounds = pages.optJSONArray(page.toString()) ?: return null
         if (bounds.length() == 0) return null
