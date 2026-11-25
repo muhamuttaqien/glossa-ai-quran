@@ -15,6 +15,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -114,6 +115,8 @@ private val Gold = Color(0xFFB89A65)
 private val ArabicBlack = Color(0xFF080808)
 private val QuranArabicFont = FontFamily(Font(R.font.qpc_hafs_v22))
 private val LightLine = Color(0xFFE6E4DC)
+private val BookmarkGrayLight = Color(0xFF626262)
+private val BookmarkGrayDark = Color(0xFFAAAAAA)
 private val ReaderChromeScheme = darkColorScheme(
     primary = Brand, onPrimary = TextWhite,
     background = Background, onBackground = TextWhite,
@@ -342,7 +345,7 @@ private fun QuranApp(
     }
     BackHandler(selected != null) { backToIndex() }
 
-    Scaffold(containerColor = if (selected != null && mode == 0) Background else MaterialTheme.colorScheme.background) { padding ->
+    Scaffold(containerColor = if (selected != null) Background else MaterialTheme.colorScheme.background) { padding ->
         if (selected == null) {
             IndexScreen(
                 surahs, tab, onTab = { tab = it }, bookmarks, lastRead,
@@ -448,8 +451,22 @@ private fun QuranApp(
                             selectedAyah = focusedAyah?.let { VerseReference(selected!!.number, it.number) },
                             chromeVisible = chromeVisible,
                             onToggleControls = { chromeVisible = !chromeVisible },
-                            onPrevious = { if (currentPage > 1) currentPage-- },
-                            onNext = { if (currentPage < 604) currentPage++ },
+                            onPrevious = {
+                                if (currentPage > 1) {
+                                    currentPage--
+                                    hitMap.firstVerseOn(currentPage)?.let {
+                                        markRead(it.surah, it.ayah)
+                                    }
+                                }
+                            },
+                            onNext = {
+                                if (currentPage < 604) {
+                                    currentPage++
+                                    hitMap.firstVerseOn(currentPage)?.let {
+                                        markRead(it.surah, it.ayah)
+                                    }
+                                }
+                            },
                             onLongPressAt = { x, y, width, height ->
                                 hitMap.verseAt(currentPage, x, y, width, height)
                                     ?.let(::openPageAyah)
@@ -458,7 +475,7 @@ private fun QuranApp(
                         )
                     } else {
                         LazyColumn(
-                            Modifier.fillMaxSize()
+                            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
                                 .semantics {
                                     customActions = listOf(
                                         CustomAccessibilityAction(
@@ -507,7 +524,7 @@ private fun QuranApp(
                     ) { bottomControls() }
                 }
             } else {
-                Column(Modifier.fillMaxSize().padding(padding)) {
+                Column(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background)) {
                     topControls()
                     if (chapterError != null) Failure(chapterError!!) { chapterRetry++ }
                     else if (chapter == null) Loading()
@@ -547,7 +564,7 @@ private fun QuranApp(
                         textDecoration = TextDecoration.None
                     )
                     Text(
-                        "Bookmark",
+                        if (isBookmarked) "Bookmarked" else "Bookmark",
                         Modifier.semantics {
                             stateDescription = if (isBookmarked) "Bookmarked" else "Not bookmarked"
                         }.clickable(
@@ -556,7 +573,7 @@ private fun QuranApp(
                         ) {
                             toggleBookmark(selected!!.number, ayah.number)
                         }.padding(vertical = 12.dp),
-                        color = if (isBookmarked) Gold else MaterialTheme.colorScheme.primary,
+                        color = if (isBookmarked) Brand else if (night) BookmarkGrayDark else BookmarkGrayLight,
                         textDecoration = TextDecoration.None
                     )
                     Text(
@@ -608,7 +625,7 @@ private fun IndexScreen(
             if (lastSurah != null) {
                 Card(
                     Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp).clickable {
-                        open(lastSurah, lastRead.ayah)
+                        open(lastSurah, lastRead.ayah.coerceIn(1, lastSurah.ayahCount))
                     },
                     shape = RoundedCornerShape(14.dp),
                     border = BorderStroke(1.dp, if (night) Color(0xFF303030) else LightLine),
@@ -617,7 +634,7 @@ private fun IndexScreen(
                     Row(Modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Continue reading", fontSize = 12.sp, color = Color.Gray)
-                            Text("${lastSurah.name}  •  Verse ${lastRead.ayah}", fontWeight = FontWeight.SemiBold)
+                            Text("${lastSurah.name}  •  Verse ${lastRead.ayah.coerceIn(1, lastSurah.ayahCount)}", fontWeight = FontWeight.SemiBold)
                         }
                         Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurface)
                     }
@@ -988,7 +1005,12 @@ private fun AyahCard(
                             play()
                         })
                         DropdownMenuItem(
-                            text = { Text("Bookmark", color = if (isBookmarked) Gold else MaterialTheme.colorScheme.onSurface) },
+                            text = {
+                                Text(
+                                    if (isBookmarked) "Bookmarked" else "Bookmark",
+                                    color = if (isBookmarked) Brand else if (night) BookmarkGrayDark else BookmarkGrayLight
+                                )
+                            },
                             modifier = Modifier.semantics {
                                 stateDescription = if (isBookmarked) "Bookmarked" else "Not bookmarked"
                             },
