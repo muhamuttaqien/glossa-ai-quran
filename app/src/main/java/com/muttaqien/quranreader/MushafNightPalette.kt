@@ -2,9 +2,11 @@ package com.muttaqien.quranreader
 
 import android.graphics.Bitmap
 
-/** Keep the printed layout, invert text, and retain Glossa red ornaments. */
+/** Keep the printed layout, render ink white on black, and retain Glossa red ornaments. */
 internal object MushafNightPalette {
     private const val GLOSSA_RED = 0xEF4D4D
+    private const val INK_LUMINANCE = 52
+    private const val PAPER_LUMINANCE = 230
 
     fun convert(source: Bitmap): Bitmap {
         val width = source.width
@@ -22,10 +24,12 @@ internal object MushafNightPalette {
             // Decoding can round the RGB values of translucent floral edges.
             val isGlossaRed = red in 223..255 && green in 61..93 && blue in 61..93
             val mapped = if (isGlossaRed) GLOSSA_RED else {
-                val invertedRed = (240f - .85f * red).toInt().coerceIn(0, 255)
-                val invertedGreen = (240f - .85f * green).toInt().coerceIn(0, 255)
-                val invertedBlue = (240f - .85f * blue).toInt().coerceIn(0, 255)
-                (invertedRed shl 16) or (invertedGreen shl 8) or invertedBlue
+                // Stretch the printed ink to white and the pale page residue to black,
+                // retaining intermediate levels for antialiased glyph edges.
+                val luminance = (54 * red + 183 * green + 19 * blue) / 256
+                val ink = ((PAPER_LUMINANCE - luminance) * 255 /
+                    (PAPER_LUMINANCE - INK_LUMINANCE)).coerceIn(0, 255)
+                (ink shl 16) or (ink shl 8) or ink
             }
             pixels[index] = (alpha shl 24) or mapped
         }
