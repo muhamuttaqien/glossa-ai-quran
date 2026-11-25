@@ -13,7 +13,7 @@ Android reader with Uthmani Arabic text (Hafs), English and Indonesian translati
 
 ## Preview
 
-The [v1.3 reading preview](preview/glossa-quran-v1.3-preview.png) shows page 2 in both themes with the reading controls visible after a tap. It is a mockup composed from the bundled Mushaf artwork, not a device screenshot.
+The [v1.3 reading preview](preview/glossa-quran-v1.3-preview.png) combines three user-supplied app screenshots of page 24: light reading without controls, dark reading with controls, and dark reading without controls. The screenshots are only resized and placed within phone mockups; the Arabic content and controls are not recreated.
 
 ## Run
 
