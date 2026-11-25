@@ -108,7 +108,8 @@ def save_exact_palette(image, path):
     """Use indexed PNG losslessly; the originals have only ~15 colors."""
     colors, indices = np.unique(image.reshape(-1, 4), axis=0, return_inverse=True)
     if len(colors) > 256:
-        raise ValueError(f"Too many colors for an exact indexed PNG: {path}")
+        Image.fromarray(image, "RGBA").save(path, optimize=True)
+        return
     indexed = Image.fromarray(indices.reshape(image.shape[:2]).astype(np.uint8), "P")
     palette = np.zeros((256, 3), dtype=np.uint8)
     palette[:len(colors)] = colors[:, :3]
