@@ -122,6 +122,10 @@ private val ReaderChromeScheme = darkColorScheme(
     surfaceVariant = CardsBlack, secondary = Brand,
 )
 
+private data class PageTranslation(
+    val reference: VerseReference, val surah: Surah, val ayah: Ayah, val chapter: Chapter
+)
+
 @Composable
 private fun ReaderChrome(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = ReaderChromeScheme) {
@@ -189,7 +193,6 @@ private fun QuranApp(
     var juzError by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<Surah?>(null) }
     var openRevision by remember { mutableIntStateOf(0) }
-    var startAyah by remember { mutableIntStateOf(1) }
     var chapter by remember { mutableStateOf<Chapter?>(null) }
     var chapterError by remember { mutableStateOf<String?>(null) }
     var chapterRetry by remember { mutableIntStateOf(0) }
@@ -200,9 +203,14 @@ private fun QuranApp(
     var focusedAyah by remember { mutableStateOf<Ayah?>(null) }
     var bookmarkedTarget by remember { mutableStateOf<VerseReference?>(null) }
     var pendingFocusedAyah by remember { mutableStateOf<VerseReference?>(null) }
+    var pendingListen by remember { mutableStateOf<VerseReference?>(null) }
     var currentPage by rememberSaveable { mutableIntStateOf(1) }
     var pageVerses by remember { mutableStateOf<List<PageVerse>>(emptyList()) }
+    var pageTranslations by remember { mutableStateOf<List<PageTranslation>>(emptyList()) }
+    var pageTranslationError by remember { mutableStateOf<String?>(null) }
+    var pageTranslationRetry by remember { mutableIntStateOf(0) }
     val verseListState = rememberLazyListState()
+    val pageSwipeThreshold = with(LocalDensity.current) { 64.dp.toPx() }
 
     fun openSurah(surah: Surah, ayah: Int = 1) {
         player.stop()
@@ -210,9 +218,9 @@ private fun QuranApp(
         focusedAyah = null
         bookmarkedTarget = null
         pendingFocusedAyah = null
+        pendingListen = null
         chapter = null
         audioUrls = emptyMap()
-        startAyah = ayah
         hitMap.pageFor(VerseReference(surah.number, ayah))?.let { currentPage = it }
         selected = surah
         chromeVisible = false
@@ -254,14 +262,13 @@ private fun QuranApp(
         preferences.edit { putStringSet("bookmarks", bookmarks) }
     }
 
-    fun shareAyah(ayah: Ayah) {
-        val (surahNumber, surahName) = selected ?: return
+    fun shareAyah(surah: Surah, ayah: Ayah, sourceChapter: Chapter) {
         val translations = when (language) {
-            1 -> "${ayah.translationEn}\n${chapter?.translatorEn.orEmpty()}"
-            2 -> "${ayah.translationEn}\n${chapter?.translatorEn.orEmpty()}\n\n${ayah.translationId}\n${chapter?.translatorId.orEmpty()}"
-            else -> "${ayah.translationId}\n${chapter?.translatorId.orEmpty()}"
+            1 -> "${ayah.translationEn}\n${sourceChapter.translatorEn}"
+            2 -> "${ayah.translationEn}\n${sourceChapter.translatorEn}\n\n${ayah.translationId}\n${sourceChapter.translatorId}"
+            else -> "${ayah.translationId}\n${sourceChapter.translatorId}"
         }
-        val text = "$surahName $surahNumber:${ayah.number}\n${ayah.arabic}\n\n$translations"
+        val text = "${surah.name} ${surah.number}:${ayah.number}\n${ayah.arabic}\n\n$translations"
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, text)
@@ -303,13 +310,28 @@ private fun QuranApp(
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { audioError = "Couldn't load recitation. Try again." }
     }
-    LaunchedEffect(selected?.number, chapter) {
-        val surah = selected ?: return@LaunchedEffect
-        val verses = chapter?.verses ?: return@LaunchedEffect
-        val index = (startAyah - 1).coerceIn(0, verses.lastIndex)
-        currentPage = hitMap.pageFor(VerseReference(surah.number, verses[index].number))
-            ?: verses[index].page
-        verseListState.scrollToItem(index)
+    LaunchedEffect(mode, currentPage, selected?.number, chapter, pageTranslationRetry) {
+        pageTranslations = emptyList()
+        pageTranslationError = null
+        if (mode != 1) return@LaunchedEffect
+        val selectedChapter = chapter ?: return@LaunchedEffect
+        val selectedSurah = selected ?: return@LaunchedEffect
+        try {
+            val references = hitMap.versesOn(currentPage)
+            val chapters = references.map { it.surah }.distinct().associateWith { number ->
+                if (number == selectedSurah.number) selectedChapter else repository.chapter(number)
+            }
+            pageTranslations = references.map { reference ->
+                val surah = surahs.first { it.number == reference.surah }
+                val sourceChapter = chapters.getValue(reference.surah)
+                val ayah = sourceChapter.verses.first { it.number == reference.ayah }
+                PageTranslation(reference, surah, ayah, sourceChapter)
+            }
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { pageTranslationError = "Couldn't load this page's translation. Try again." }
+    }
+    LaunchedEffect(mode, currentPage, pageTranslations) {
+        if (mode == 1 && pageTranslations.isNotEmpty()) verseListState.scrollToItem(0)
     }
     LaunchedEffect(chapter, selected?.number, pendingFocusedAyah) {
         val reference = pendingFocusedAyah ?: return@LaunchedEffect
@@ -338,13 +360,35 @@ private fun QuranApp(
             return
         }
         currentVerse = index
-        currentPage = hitMap.pageFor(VerseReference(surah.number, verses[index].number))
-            ?: verses[index].page
+        val reference = VerseReference(surah.number, verses[index].number)
+        if (reference !in hitMap.versesOn(currentPage)) {
+            currentPage = hitMap.pageFor(reference) ?: verses[index].page
+        }
         markRead(surah.number, verses[index].number)
         player.play(url) {
             if (index < verses.lastIndex) startVerse(index + 1)
             else player.stop()
         }
+    }
+
+    fun playReference(reference: VerseReference) {
+        if (selected?.number == reference.surah) {
+            startVerse(reference.ayah - 1)
+        } else {
+            val surah = surahs.firstOrNull { it.number == reference.surah } ?: return
+            val page = currentPage
+            openSurah(surah, reference.ayah)
+            if (reference in hitMap.versesOn(page)) currentPage = page
+            pendingListen = reference
+        }
+    }
+    LaunchedEffect(pendingListen, selected?.number, chapter, audioUrls) {
+        val reference = pendingListen ?: return@LaunchedEffect
+        if (selected?.number != reference.surah || chapter == null ||
+            audioUrls[reference.ayah] == null
+        ) return@LaunchedEffect
+        pendingListen = null
+        startVerse(reference.ayah - 1)
     }
 
     fun backToIndex() {
@@ -354,6 +398,7 @@ private fun QuranApp(
         focusedAyah = null
         bookmarkedTarget = null
         pendingFocusedAyah = null
+        pendingListen = null
     }
     BackHandler(selected != null) { backToIndex() }
 
@@ -375,7 +420,11 @@ private fun QuranApp(
                 ReaderChrome {
                     Column {
                         ReaderHeader(
-                            if (mode == 0) pageVerses.firstOrNull()?.surahName ?: "Mushaf Madinah" else selected!!.name,
+                            if (mode == 0) pageVerses.firstOrNull()?.surahName ?: "Mushaf Madinah"
+                            else pageTranslations.firstOrNull()?.surah?.name
+                                ?: surahs.firstOrNull {
+                                    it.number == hitMap.firstVerseOn(currentPage)?.surah
+                                }?.name ?: selected!!.name,
                             night, onToggleNight, ::backToIndex
                         )
                         Row(Modifier.fillMaxWidth()) {
@@ -416,13 +465,11 @@ private fun QuranApp(
             val bottomControls: @Composable () -> Unit = {
                 ReaderChrome {
                     Column {
-                        if (mode == 0) {
-                            Text(
-                                "$currentPage / 604",
-                                Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                                textAlign = TextAlign.Center, fontSize = 13.sp
-                            )
-                        }
+                        Text(
+                            "$currentPage / 604",
+                            Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            textAlign = TextAlign.Center, fontSize = 13.sp
+                        )
                         ReciterSelector(reciter) { next ->
                             player.stop()
                             currentVerse = -1
@@ -453,11 +500,12 @@ private fun QuranApp(
                             onPrevious = { startVerse((currentVerse - 1).coerceAtLeast(0)) },
                             onNext = { startVerse((currentVerse + 1).coerceAtMost(verses.lastIndex)) },
                             onToggle = {
-                                if (currentVerse < 0 || player.error != null) {
-                                    if (mode == 0) {
-                                        verses.firstOrNull { it.page == currentPage }
-                                            ?.let { startVerse(it.number - 1) }
-                                    } else startVerse(startAyah - 1)
+                                val playingOnPage = verses.getOrNull(currentVerse)?.let {
+                                    VerseReference(selected!!.number, it.number) in hitMap.versesOn(currentPage)
+                                } == true
+                                if (currentVerse < 0 || player.error != null || !playingOnPage) {
+                                    (if (mode == 0) hitMap.firstVerseOn(currentPage)
+                                    else pageTranslations.firstOrNull()?.reference)?.let(::playReference)
                                 } else player.toggle()
                             }
                         )
@@ -502,8 +550,37 @@ private fun QuranApp(
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
-                        LazyColumn(
+                        if (pageTranslationError != null) {
+                            Failure(pageTranslationError!!) { pageTranslationRetry++ }
+                        } else if (pageTranslations.isEmpty()) {
+                            Loading()
+                        } else LazyColumn(
                             Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+                                .pointerInput(currentPage, pageSwipeThreshold) {
+                                    var drag = 0f
+                                    detectHorizontalDragGestures(
+                                        onDragEnd = {
+                                            val nextPage = when {
+                                                drag >= pageSwipeThreshold && currentPage < 604 -> currentPage + 1
+                                                drag <= -pageSwipeThreshold && currentPage > 1 -> currentPage - 1
+                                                else -> currentPage
+                                            }
+                                            drag = 0f
+                                            if (nextPage != currentPage) {
+                                                currentPage = nextPage
+                                                bookmarkedTarget = null
+                                                hitMap.firstVerseOn(nextPage)?.let {
+                                                    markRead(it.surah, it.ayah)
+                                                }
+                                            }
+                                        },
+                                        onDragCancel = { drag = 0f },
+                                        onHorizontalDrag = { change, amount ->
+                                            drag += amount
+                                            change.consume()
+                                        }
+                                    )
+                                }
                                 .semantics {
                                     customActions = listOf(
                                         CustomAccessibilityAction(
@@ -516,22 +593,25 @@ private fun QuranApp(
                                 },
                             state = verseListState
                         ) {
-                            items(verses, key = { it.number }) { ayah ->
+                            items(pageTranslations, key = { "${it.reference.surah}:${it.reference.ayah}" }) { item ->
                                 AyahCard(
-                                    ayah, night, language, chapter!!,
-                                    isBookmarked = "${selected!!.number}:${ayah.number}" in bookmarks,
-                                    audioReady = audioUrls.containsKey(ayah.number),
-                                    play = { startVerse(ayah.number - 1) },
-                                    bookmark = { toggleBookmark(selected!!.number, ayah.number) },
-                                    share = { shareAyah(ayah) },
+                                    item.ayah, night, language, item.chapter,
+                                    label = if (pageTranslations.any { it.surah.number != item.surah.number })
+                                        "${item.surah.name} • Ayah ${item.ayah.number}" else "Ayah ${item.ayah.number}",
+                                    isBookmarked = "${item.surah.number}:${item.ayah.number}" in bookmarks,
+                                    audioReady = if (item.surah.number == selected!!.number)
+                                        audioUrls.containsKey(item.ayah.number) else true,
+                                    play = { playReference(item.reference) },
+                                    bookmark = { toggleBookmark(item.surah.number, item.ayah.number) },
+                                    share = { shareAyah(item.surah, item.ayah, item.chapter) },
                                 ) {
-                                    markRead(selected!!.number, ayah.number)
+                                    markRead(item.surah.number, item.ayah.number)
                                     chromeVisible = !chromeVisible
                                 }
                             }
                             item {
                                 Text(
-                                    "Arabic: King Fahd Qur'an Printing Complex (Hafs v22) • Translation: ${translationCredits(chapter!!, language)}",
+                                    "Arabic: King Fahd Qur'an Printing Complex (Hafs v22) • Translation: ${translationCredits(pageTranslations.first().chapter, language)}",
                                     Modifier.fillMaxWidth().padding(20.dp),
                                     color = Color.Gray, fontSize = 12.sp, textAlign = TextAlign.Center
                                 )
@@ -609,7 +689,7 @@ private fun QuranApp(
                         Modifier.clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
-                        ) { shareAyah(ayah) }
+                        ) { chapter?.let { shareAyah(selected!!, ayah, it) } }
                             .padding(vertical = 12.dp),
                         color = MaterialTheme.colorScheme.primary,
                         textDecoration = TextDecoration.None
@@ -1005,7 +1085,7 @@ private fun TranslationContent(ayah: Ayah, language: Int) {
 @Composable
 private fun AyahCard(
     ayah: Ayah, night: Boolean, language: Int, chapter: Chapter,
-    isBookmarked: Boolean, audioReady: Boolean,
+    label: String, isBookmarked: Boolean, audioReady: Boolean,
     play: () -> Unit, bookmark: () -> Unit, share: () -> Unit, read: () -> Unit
 ) {
     var actionsExpanded by remember { mutableStateOf(value = false) }
@@ -1023,7 +1103,7 @@ private fun AyahCard(
             ).padding(20.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Ayah ${ayah.number}", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
+                Text(label, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
                 Box {
                     IconButton(onClick = { actionsExpanded = true }, modifier = Modifier.semantics { contentDescription = "Ayah actions" }) {
                         Text("⋮", color = MaterialTheme.colorScheme.onSurface, fontSize = 24.sp)
