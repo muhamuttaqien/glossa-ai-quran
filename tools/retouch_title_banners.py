@@ -1,6 +1,6 @@
 """Replace the earlier drawn title motifs with the supplied floral silhouette.
 
-Runs on the already simplified numbered Mushaf PNGs. Only red banner pixels
+Runs on the already simplified `-new.png` Mushaf pages. Only red banner pixels
 inside the detected title bands are cleared; printed Arabic and verse markers
 are left untouched. Run against a copy of app/src/main/assets/mushaf first.
 """
@@ -21,7 +21,7 @@ def retouch(source, target):
     count = pages = 0
     target.mkdir(parents=True, exist_ok=True)
     for page in range(1, 605):
-        image = np.asarray(Image.open(source / f"{page}.png").convert("RGBA"))
+        image = np.asarray(Image.open(source / f"{page}-new.png").convert("RGBA"))
         red = np.logical_or.reduce([np.all(image == color, axis=2) for color in SOURCE_REDS])
         lines = np.flatnonzero(red.sum(axis=1) > image.shape[1] * .65)
         if len(lines) % 2:
@@ -43,7 +43,7 @@ def retouch(source, target):
             painted = art[:, :, 3] > 0
             output[painted] = art[painted]
             count += 1
-        save_exact_palette(output, target / f"{page}.png")
+        save_exact_palette(output, target / f"{page}-new.png")
     if (pages, count) != (98, 114):
         raise ValueError(f"Expected 98 pages / 114 banners, got {pages} / {count}")
     print(f"Retouched {count} banners on {pages} pages; other pages unchanged.")
