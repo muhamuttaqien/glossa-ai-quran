@@ -569,7 +569,9 @@ private fun SurahRow(surah: Surah, night: Boolean, open: () -> Unit) {
 private fun ReaderHeader(title: String, night: Boolean, toggleNight: () -> Unit, back: () -> Unit) {
     Surface(color = SurfaceBlack) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = back) { Text("‹ Back", color = TextWhite) }
+            TextButton(onClick = back, modifier = Modifier.semantics { contentDescription = "Back to index" }) {
+                Text("‹", color = TextWhite, fontSize = 26.sp)
+            }
             Text(title, Modifier.weight(1f), color = TextWhite, textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold)
             TextButton(
                 onClick = toggleNight,
@@ -804,11 +806,12 @@ private fun PlayerBar(
 ) {
     Surface(color = if (night) SurfaceBlack else Paper, shadowElevation = 2.dp) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-            Text(
-                if (verse < 0) "Choose a verse or press Play"
-                else "Verse ${verse + 1} of $count${if (player.loading) " • Loading…" else ""}",
-                Modifier.fillMaxWidth(), color = Color.Gray, fontSize = 12.sp, textAlign = TextAlign.Center
-            )
+            if (verse >= 0) {
+                Text(
+                    "Verse ${verse + 1} of $count${if (player.loading) " • Loading…" else ""}",
+                    Modifier.fillMaxWidth(), color = Color.Gray, fontSize = 12.sp, textAlign = TextAlign.Center
+                )
+            }
             if (player.error != null) Text(player.error!!, color = Color(0xFFFFA598), fontSize = 12.sp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onPrevious, modifier = Modifier.semantics { contentDescription = "Previous verse" }, enabled = verse > 0 && !audioLoading) {
