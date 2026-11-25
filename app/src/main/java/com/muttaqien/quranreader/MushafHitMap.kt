@@ -6,12 +6,18 @@ import org.json.JSONObject
 import kotlin.math.abs
 
 /**
- * Hit boxes for the bundled Madinah Mushaf images. The source coordinates are
- * adapted from GitCreativeCode/quran-ayah-coords (CC BY-SA 4.0); see the
- * attribution beside ayah_bounds.json. A long press near a verse boundary
- * returns null, leaving the page unchanged.
+ * Verse order comes from the bundled ayah metadata; image hit areas are
+ * generated from the marker positions of the high-resolution page artwork.
+ * The older coordinates are adapted from GitCreativeCode/quran-ayah-coords
+ * (CC BY-SA 4.0) and remain available for the legacy image fallback.
+ * A long press near a verse boundary leaves the page unchanged.
  */
 class MushafHitMap(private val context: Context) {
+    private val highResolution: JSONObject by lazy {
+        context.assets.open("mushaf/highres_ayah_bounds.json").bufferedReader().use {
+            JSONObject(it.readText())
+        }
+    }
     private val pages: JSONObject by lazy {
         context.assets.open("mushaf/ayah_bounds.json").bufferedReader().use {
             JSONObject(it.readText())
@@ -55,12 +61,18 @@ class MushafHitMap(private val context: Context) {
         if (page !in 1..604 || width <= 0 || height <= 0 ||
             x !in 0f..width.toFloat() || y !in 0f..height.toFloat()
         ) return null
-        if (page == 3 && width == 1000 && height == 1902) {
-            return PageThreeHighResMap.verseAt(x, y)
-        }
-        if (page == 4 && width == 491 && height == 914) {
-            val originalY = PageFourSpacedMap.originalY(y) ?: return null
-            return verseAt(page, x, originalY, 491, 802)
+        highResAreas(page, width, height)?.let { areas ->
+            var result: VerseReference? = null
+            for (index in 0 until areas.length()) {
+                val area = areas.getJSONArray(index)
+                if (x < area.getInt(2) + 26f || x > area.getInt(4) - 26f ||
+                    y < area.getInt(3) + 4f || y > area.getInt(5) - 4f
+                ) continue
+                val verse = VerseReference(area.getInt(0), area.getInt(1))
+                if (result != null && result != verse) return null
+                result = verse
+            }
+            return result
         }
         // The opening pages have ornamental frames and a different text canvas.
         if (page <= 2 && (width != 442 || height != 645)) return null
@@ -108,18 +120,19 @@ class MushafHitMap(private val context: Context) {
 
     /** Image-pixel rectangles for a selected ayah; no artwork is modified. */
     fun areasFor(page: Int, reference: VerseReference, width: Int, height: Int): List<RectF> {
-        if (page !in 1..604 || width <= 0 || height <= 0 ||
-            (page <= 2 && (width != 442 || height != 645))
-        ) return emptyList()
-        if (page == 3 && width == 1000 && height == 1902) {
-            return PageThreeHighResMap.areasFor(reference)
-        }
-        if (page == 4 && width == 491 && height == 914) {
-            return areasFor(page, reference, 491, 802).map { area ->
-                RectF(area.left, PageFourSpacedMap.displayY(area.top),
-                    area.right, PageFourSpacedMap.displayY(area.bottom))
+        if (page !in 1..604 || width <= 0 || height <= 0) return emptyList()
+        highResAreas(page, width, height)?.let { areas ->
+            return buildList {
+                for (index in 0 until areas.length()) {
+                    val area = areas.getJSONArray(index)
+                    if (area.getInt(0) == reference.surah && area.getInt(1) == reference.ayah) {
+                        add(RectF(area.getInt(2).toFloat(), area.getInt(3).toFloat(),
+                            area.getInt(4).toFloat(), area.getInt(5).toFloat()))
+                    }
+                }
             }
         }
+        if (page <= 2 && (width != 442 || height != 645)) return emptyList()
         val bounds = pages.optJSONArray(page.toString()) ?: return emptyList()
         val areas = mutableListOf<RectF>()
         for (index in 0 until bounds.length()) {
@@ -139,85 +152,10 @@ class MushafHitMap(private val context: Context) {
     private fun imageY(page: Int, sourceY: Float, height: Int): Float =
         if (page <= 2) (200f + (sourceY - 125f) * 245f / 589f) * height / 645f
         else (sourceY - 24f) * height / 1590f
-}
 
-/** Undo or apply the eight transparent pixels inserted after each page 4 line. */
-internal object PageFourSpacedMap {
-    private val cuts = intArrayOf(
-        51, 109, 158, 212, 265, 317, 373, 425, 480, 536, 585, 644, 693, 746
-    )
-    private const val gap = 8
-
-    fun originalY(displayY: Float): Float? {
-        var start = 0f
-        for (line in 0..cuts.size) {
-            val end = (if (line == cuts.size) 802 else cuts[line]).toFloat()
-            val offset = line * gap
-            if (displayY >= start + offset && displayY < end + offset) {
-                return displayY - offset
-            }
-            start = end
-        }
-        return null
-    }
-
-    fun displayY(originalY: Float): Float =
-        originalY + gap * cuts.count { originalY >= it }
-}
-
-/** The high-resolution source shifts verse endings relative to the 442 px pages. */
-internal object PageThreeHighResMap {
-    // The original 1080x1440 source is cropped by 40 px on each side. Fourteen
-    // transparent row gaps are inserted after these source y coordinates.
-    private val lineCuts = intArrayOf(
-        96, 189, 288, 384, 480, 576, 672, 768, 864, 960, 1056, 1152, 1249, 1344
-    )
-    private const val lineGap = 33
-
-    private data class Segment(val line: Int, val ayah: Int, val left: Float, val right: Float) {
-        val top: Float get() = if (line == 1) 0f
-            else (PageThreeHighResMap.lineCuts[line - 2] + (line - 1) * lineGap).toFloat()
-        val bottom: Float get() = if (line == 15) 1902f
-            else (PageThreeHighResMap.lineCuts[line - 1] + (line - 1) * lineGap).toFloat()
-        fun rect() = RectF((left - 40f).coerceAtLeast(0f), top,
-            (right - 40f).coerceAtMost(1000f), bottom)
-    }
-
-    // Boundaries are the centers of the original printed verse markers. The
-    // original Arabic numeral pixels remain in the high-resolution artwork.
-    private val segments = listOf(
-        Segment(1, 6, 24f, 1056f),
-        Segment(2, 6, 802f, 1056f), Segment(2, 7, 24f, 802f),
-        Segment(3, 7, 285f, 1056f), Segment(3, 8, 24f, 285f),
-        Segment(4, 8, 24f, 1056f),
-        Segment(5, 9, 24f, 1056f),
-        Segment(6, 9, 761f, 1056f), Segment(6, 10, 24f, 761f),
-        Segment(7, 10, 327f, 1056f), Segment(7, 11, 24f, 327f),
-        Segment(8, 11, 24f, 1056f),
-        Segment(9, 12, 243f, 1056f), Segment(9, 13, 24f, 243f),
-        Segment(10, 13, 24f, 1056f),
-        Segment(11, 13, 284f, 1056f), Segment(11, 14, 24f, 284f),
-        Segment(12, 14, 24f, 1056f),
-        Segment(13, 14, 508f, 1056f), Segment(13, 15, 24f, 508f),
-        Segment(14, 15, 628f, 1056f), Segment(14, 16, 24f, 628f),
-        Segment(15, 16, 24f, 1056f)
-    )
-
-    fun verseAt(x: Float, y: Float): VerseReference? {
-        val sourceX = x + 40f
-        val segment = segments.firstOrNull {
-            sourceX >= it.left && sourceX <= it.right &&
-                y >= it.top + 4f && y <= it.bottom - 4f
-        } ?: return null
-        // Avoid assigning a long press on a marker to the wrong adjacent ayah.
-        if (segments.any {
-                it.line == segment.line && it.ayah != segment.ayah &&
-                    (abs(sourceX - it.left) < 30f || abs(sourceX - it.right) < 30f)
-            }) return null
-        return VerseReference(2, segment.ayah)
-    }
-
-    fun areasFor(reference: VerseReference): List<RectF> =
-        if (reference.surah == 2) segments.filter { it.ayah == reference.ayah }.map { it.rect() }
-        else emptyList()
+    private fun highResAreas(page: Int, width: Int, height: Int) =
+        highResolution.optJSONObject(page.toString())?.takeIf {
+            val size = it.getJSONArray("size")
+            size.getInt(0) == width && size.getInt(1) == height
+        }?.getJSONArray("areas")
 }
