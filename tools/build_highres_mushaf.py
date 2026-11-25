@@ -111,6 +111,30 @@ def erase_and_redraw(image, positions, page):
         # The numeral is a distinct source ink component. Remove only the
         # matched outer ornament and its one-pixel antialias fringe.
         a[cv2.dilate(mask.astype("uint8"),np.ones((3,3),np.uint8)).astype(bool)] = 0
+    if page > 3:
+        # A few source ornaments have separate tiny loops, not connected to
+        # the matched outer ring. Remove only small fragments alongside that
+        # ring; keep the center numeral and any ink continuing into a letter.
+        _, labels, stats, _ = cv2.connectedComponentsWithStats((a > 8).astype("uint8"), 8)
+        for cx, cy, mask in positions:
+            x1, x2 = max(0,cx-46), min(a.shape[1],cx+47)
+            y1, y2 = max(0,cy-40), min(a.shape[0],cy+41)
+            nearby = cv2.dilate(mask[y1:y2,x1:x2].astype("uint8"),
+                                np.ones((11,11),np.uint8)).astype(bool)
+            center = labels[max(0,cy-18):cy+19,max(0,cx-18):cx+19]
+            local_labels = labels[y1:y2,x1:x2]
+            for label in np.unique(local_labels[nearby]):
+                if not label:
+                    continue
+                x, y, w, h, area = stats[label]
+                if (area > 120 or x < x1 or y < y1 or x+w > x2 or y+h > y2
+                        or np.any(center == label)):
+                    continue
+                fragment = local_labels == label
+                if np.count_nonzero(fragment & nearby) < .75*area:
+                    continue
+                crop = a[y:y+h,x:x+w]
+                crop[labels[y:y+h,x:x+w] == label] = 0
     # The WebP RGB channels carry a gray haze even where alpha already encodes
     # the antialias edge. Page 3's crisp pilot used black ink with that alpha.
     result = Image.new("RGBA", image.size, (0, 0, 0, 0))
