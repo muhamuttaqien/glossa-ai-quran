@@ -1,0 +1,19 @@
+Ayah hit-box data attribution
+
+Source: GitCreativeCode/quran-ayah-coords
+https://github.com/GitCreativeCode/quran-ayah-coords
+
+License: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+https://creativecommons.org/licenses/by-sa/4.0/
+The complete license text is in AYAH_COORDS_LICENSE.txt.
+
+Adaptation in ayah_bounds.json: the 604 source JSON files were combined by
+page, retaining line number, surah number, ayah number, and the original
+min/max x/y coordinates as seven-element numeric arrays:
+[line, surah, ayah, min_x, max_x, min_y, max_y].
+The source's repeated page_number and position fields were omitted.
+The Qur'an page images and Arabic text were not changed.
+
+The interaction maps those coordinates to the bundled compact PNG images.
+Taps close to a boundary fall back to a page verse list because the source
+coordinate images and these compact PNGs are not pixel-identical.

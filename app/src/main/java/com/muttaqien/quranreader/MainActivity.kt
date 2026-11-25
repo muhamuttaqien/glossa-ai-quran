@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -54,6 +55,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -70,6 +72,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -137,6 +140,7 @@ private fun QuranApp(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val preferences = remember { context.getSharedPreferences("reader", Context.MODE_PRIVATE) }
+    val hitMap = remember { MushafHitMap(context.applicationContext) }
     var reciter by remember {
         val savedEdition = preferences.getString("reciter", "ar.alafasy")
         val savedReciter = Reciter.choices.firstOrNull { (_, edition) -> edition == savedEdition }
@@ -167,6 +171,7 @@ private fun QuranApp(
     var audioRetry by remember { mutableIntStateOf(0) }
     var currentVerse by remember { mutableIntStateOf(-1) }
     var focusedAyah by remember { mutableStateOf<Ayah?>(null) }
+    var pendingFocusedAyah by remember { mutableStateOf<VerseReference?>(null) }
     var currentPage by rememberSaveable { mutableIntStateOf(1) }
     var pageVerses by remember { mutableStateOf<List<PageVerse>>(emptyList()) }
     var pageError by remember { mutableStateOf<String?>(null) }
@@ -177,6 +182,7 @@ private fun QuranApp(
         player.stop()
         currentVerse = -1
         focusedAyah = null
+        pendingFocusedAyah = null
         chapter = null
         audioUrls = emptyMap()
         startAyah = ayah
@@ -189,6 +195,25 @@ private fun QuranApp(
         preferences.edit {
             putInt("last_surah", surah)
             putInt("last_ayah", ayah)
+        }
+    }
+
+    fun openPageAyah(reference: VerseReference) {
+        val surah = surahs.firstOrNull { it.number == reference.surah }
+        if (surah == null) {
+            showPageVerses = true
+            return
+        }
+        if (selected?.number != reference.surah) {
+            openSurah(surah, reference.ayah)
+            pendingFocusedAyah = reference
+        } else {
+            val ayah = chapter?.verses?.firstOrNull { it.number == reference.ayah }
+            if (ayah == null) showPageVerses = true
+            else {
+                focusedAyah = ayah
+                markRead(reference.surah, reference.ayah)
+            }
         }
     }
 
@@ -254,6 +279,15 @@ private fun QuranApp(
         verseListState.requestScrollToItem(index)
         currentPage = verses[index].page
     }
+    LaunchedEffect(chapter, selected?.number, pendingFocusedAyah) {
+        val reference = pendingFocusedAyah ?: return@LaunchedEffect
+        if (selected?.number != reference.surah) return@LaunchedEffect
+        val ayah = chapter?.verses?.firstOrNull { it.number == reference.ayah }
+            ?: return@LaunchedEffect
+        focusedAyah = ayah
+        markRead(reference.surah, reference.ayah)
+        pendingFocusedAyah = null
+    }
     LaunchedEffect(currentPage, selected?.number) {
         if (selected == null) return@LaunchedEffect
         pageVerses = emptyList()
@@ -286,6 +320,7 @@ private fun QuranApp(
         currentVerse = -1
         selected = null
         focusedAyah = null
+        pendingFocusedAyah = null
     }
     BackHandler(selected != null) { backToIndex() }
 
@@ -337,6 +372,11 @@ private fun QuranApp(
                             onPrevious = { if (currentPage > 1) currentPage-- },
                             onNext = { if (currentPage < 604) currentPage++ },
                             onOpenVerses = { showPageVerses = true },
+                            onTapAt = { x, y, width, height ->
+                                val reference = hitMap.verseAt(currentPage, x, y, width, height)
+                                if (reference == null) showPageVerses = true
+                                else openPageAyah(reference)
+                            },
                             modifier = Modifier.weight(1f)
                         )
                     } else {
@@ -610,6 +650,7 @@ private fun ReaderHeader(title: String, night: Boolean, toggleNight: () -> Unit,
 private fun MushafPage(
     page: Int, verses: List<PageVerse>, error: String?, night: Boolean,
     onPrevious: () -> Unit, onNext: () -> Unit, onOpenVerses: () -> Unit,
+    onTapAt: (Float, Float, Int, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -621,6 +662,8 @@ private fun MushafPage(
     val pageColor = if (night) CardsBlack else Paper
     val pageText = if (night) TextWhite else Ink
     val swipeThreshold = with(LocalDensity.current) { 64.dp.toPx() }
+    val latestTapAt by rememberUpdatedState(onTapAt)
+    val latestOpenVerses by rememberUpdatedState(onOpenVerses)
     // Keep the fixed page layout and glyphs; only remap its luminance for night reading.
     val nightFilter = remember {
         ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
@@ -659,6 +702,10 @@ private fun MushafPage(
                 bitmap = image, contentDescription = "Mushaf Madinah Hafs page $page. Tap to choose a verse. Swipe right for the next page or left for the previous page.",
                 modifier = Modifier.fillMaxWidth().weight(1f)
                     .semantics {
+                        onClick(label = "Choose a verse from this page") {
+                            onOpenVerses()
+                            true
+                        }
                         customActions = listOf(
                             CustomAccessibilityAction("Next page") {
                                 if (page < 604) { onNext(); true } else false
@@ -668,7 +715,22 @@ private fun MushafPage(
                             }
                         )
                     }
-                    .clickable(onClick = onOpenVerses),
+                    .pointerInput(page, image.width, image.height) {
+                        detectTapGestures { tap ->
+                            val scale = minOf(
+                                size.width.toFloat() / image.width,
+                                size.height.toFloat() / image.height
+                            )
+                            val left = (size.width - image.width * scale) / 2f
+                            val top = (size.height - image.height * scale) / 2f
+                            val x = (tap.x - left) / scale
+                            val y = (tap.y - top) / scale
+                            if (x in 0f..image.width.toFloat() &&
+                                y in 0f..image.height.toFloat()
+                            ) latestTapAt(x, y, image.width, image.height)
+                            else latestOpenVerses()
+                        }
+                    },
                 contentScale = ContentScale.Fit,
                 colorFilter = if (night) nightFilter else null
             )
