@@ -30,7 +30,8 @@ def alpha(source):
 
 def ring_templates(source):
     samples = [(4, 150, 115, 85, 65), (14, 70, 216, 72, 54),
-               (270, 451, 212, 80, 60)]
+               (270, 451, 212, 80, 60), (596, 68, 493, 82, 62),
+               (596, 103, 1239, 78, 59)]
     result = []
     for page, x, y, width, height in samples:
         a = alpha(Image.open(source / f"{page:03}.webp").convert("RGBA"))
