@@ -88,9 +88,11 @@ def title_ink(original, page, y1, y2):
             + 29 * original[:, :, 2].astype(np.int32)) >> 8
     mask = np.zeros((h, w), dtype=bool)
     if page <= 2:
-        # The printed crest has tiny detached ornament flecks at x=174–178
-        # and x=264–272. The actual Arabic lettering stays within 179–263.
-        mask[47:74, 179:264] = True
+        # The printed crest has detached ornament flecks at x=174–178 and
+        # x=264–272. The lettering reaches row 46 on both pages and row 77
+        # on page 2; retaining only rows 47–73 clipped those original strokes.
+        mask[46:78, 179:264] = True
+        mask[46, 179:181] = False  # A separate crest fleck, not a letter.
         shift = y1 + 15 - 47
     else:
         mask[y1 + 10:y2 - 8, w // 2 - 85:w // 2 + 85] = True
