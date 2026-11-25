@@ -338,7 +338,8 @@ private fun QuranApp(
             return
         }
         currentVerse = index
-        if (mode == 0) currentPage = verses[index].page
+        currentPage = hitMap.pageFor(VerseReference(surah.number, verses[index].number))
+            ?: verses[index].page
         markRead(surah.number, verses[index].number)
         player.play(url) {
             if (index < verses.lastIndex) startVerse(index + 1)
@@ -470,6 +471,9 @@ private fun QuranApp(
                         MushafPage(
                             currentPage, night, hitMap,
                             selectedAyah = focusedAyah?.let { VerseReference(selected!!.number, it.number) }
+                                ?: (if (player.active) verses.getOrNull(currentVerse)?.let {
+                                    VerseReference(selected!!.number, it.number)
+                                } else null)
                                 ?: bookmarkedTarget,
                             chromeVisible = chromeVisible,
                             onToggleControls = { chromeVisible = !chromeVisible },

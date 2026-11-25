@@ -12,6 +12,8 @@ class VersePlayer {
         private set
     var loading by mutableStateOf(false)
         private set
+    var active by mutableStateOf(false)
+        private set
     var error by mutableStateOf<String?>(null)
         private set
 
@@ -40,6 +42,7 @@ class VersePlayer {
             player.setOnCompletionListener {
                 if (current == generation) {
                     playing = false
+                    active = false
                     onFinished()
                 }
             }
@@ -47,12 +50,14 @@ class VersePlayer {
                 if (current == generation) {
                     loading = false
                     playing = false
+                    active = false
                     error = "Couldn't play audio. Check your connection and try again."
                 }
                 true
             }
             player.setDataSource(url)
             player.prepareAsync()
+            active = true
         } catch (_: Exception) {
             stop()
             error = "Couldn't play audio. Check your connection and try again."
@@ -74,5 +79,6 @@ class VersePlayer {
         media = null
         playing = false
         loading = false
+        active = false
     }
 }
