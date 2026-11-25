@@ -563,15 +563,9 @@ private fun SurahRow(surah: Surah, night: Boolean, open: () -> Unit) {
 private fun ReaderHeader(title: String, night: Boolean, toggleNight: () -> Unit, back: () -> Unit) {
     Surface(color = SurfaceBlack) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = back, modifier = Modifier.semantics { contentDescription = "Back to index" }) {
-                Text("‹", color = TextWhite, fontSize = 28.sp)
-            }
+            TextButton(onClick = back) { Text("‹ Back", color = TextWhite) }
             Text(title, Modifier.weight(1f), color = TextWhite, textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold)
-            IconButton(onClick = toggleNight, modifier = Modifier.semantics {
-                contentDescription = if (night) "Switch to light mode" else "Switch to dark mode"
-            }) {
-                Text(if (night) "☀" else "☾", color = TextWhite, fontSize = 22.sp)
-            }
+            TextButton(onClick = toggleNight) { Text(if (night) "☀" else "☾", color = TextWhite, fontSize = 22.sp) }
         }
     }
 }
