@@ -74,6 +74,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -227,7 +228,7 @@ private fun QuranApp(
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, text)
         }
-        context.startActivity(Intent.createChooser(intent, "Share verse"))
+        context.startActivity(Intent.createChooser(intent, "Share"))
     }
 
     LaunchedEffect(listRetry) {
@@ -426,16 +427,22 @@ private fun QuranApp(
     if (ayah != null && selected != null) {
         ModalBottomSheet(onDismissRequest = { focusedAyah = null }) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
-                Text("${selected!!.name} • Verse ${ayah.number}", fontWeight = FontWeight.Bold)
+                Text("${selected!!.name} • ${selected!!.number}:${ayah.number}", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(12.dp))
                 TranslationContent(ayah, language)
                 Spacer(Modifier.height(12.dp))
+                val isBookmarked = "${selected!!.number}:${ayah.number}" in bookmarks
                 Row {
-                    TextButton(onClick = { toggleBookmark(selected!!.number, ayah.number) }) {
-                        Text(if ("${selected!!.number}:${ayah.number}" in bookmarks) "Remove bookmark" else "Bookmark verse")
-                    }
                     TextButton(onClick = { focusedAyah = null; startVerse(ayah.number - 1) }, enabled = audioUrls.containsKey(ayah.number)) {
-                        Text("▷ Listen")
+                        Text("Listen")
+                    }
+                    TextButton(
+                        onClick = { toggleBookmark(selected!!.number, ayah.number) },
+                        modifier = Modifier.semantics {
+                            stateDescription = if (isBookmarked) "Bookmarked" else "Not bookmarked"
+                        }
+                    ) {
+                        Text("Bookmark", color = if (isBookmarked) Gold else MaterialTheme.colorScheme.primary)
                     }
                     TextButton(onClick = { shareAyah(ayah) }) { Text("Share") }
                 }
@@ -794,9 +801,9 @@ private fun AyahCard(
     ) {
         Column(Modifier.fillMaxWidth().clickable(onClick = read).padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Verse ${ayah.number}", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
+                Text("Ayah ${ayah.number}", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
                 Box {
-                    IconButton(onClick = { actionsExpanded = true }, modifier = Modifier.semantics { contentDescription = "Verse actions" }) {
+                    IconButton(onClick = { actionsExpanded = true }, modifier = Modifier.semantics { contentDescription = "Ayah actions" }) {
                         Text("⋮", color = MaterialTheme.colorScheme.onSurface, fontSize = 24.sp)
                     }
                     DropdownMenu(expanded = actionsExpanded, onDismissRequest = { actionsExpanded = false }) {
@@ -804,11 +811,17 @@ private fun AyahCard(
                             actionsExpanded = false
                             play()
                         })
-                        DropdownMenuItem(text = { Text(if (isBookmarked) "Remove bookmark" else "Bookmark verse") }, onClick = {
-                            actionsExpanded = false
-                            bookmark()
-                        })
-                        DropdownMenuItem(text = { Text("Share verse") }, onClick = {
+                        DropdownMenuItem(
+                            text = { Text("Bookmark", color = if (isBookmarked) Gold else MaterialTheme.colorScheme.onSurface) },
+                            modifier = Modifier.semantics {
+                                stateDescription = if (isBookmarked) "Bookmarked" else "Not bookmarked"
+                            },
+                            onClick = {
+                                actionsExpanded = false
+                                bookmark()
+                            }
+                        )
+                        DropdownMenuItem(text = { Text("Share") }, onClick = {
                             actionsExpanded = false
                             share()
                         })
