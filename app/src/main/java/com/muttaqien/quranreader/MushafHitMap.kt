@@ -55,6 +55,9 @@ class MushafHitMap(private val context: Context) {
         if (page !in 1..604 || width <= 0 || height <= 0 ||
             x !in 0f..width.toFloat() || y !in 0f..height.toFloat()
         ) return null
+        if (page == 3 && width == 1080 && height == 1440) {
+            return PageThreeHighResMap.verseAt(x, y)
+        }
         // The opening pages have ornamental frames and a different text canvas.
         if (page <= 2 && (width != 442 || height != 645)) return null
 
@@ -104,6 +107,9 @@ class MushafHitMap(private val context: Context) {
         if (page !in 1..604 || width <= 0 || height <= 0 ||
             (page <= 2 && (width != 442 || height != 645))
         ) return emptyList()
+        if (page == 3 && width == 1080 && height == 1440) {
+            return PageThreeHighResMap.areasFor(reference)
+        }
         val bounds = pages.optJSONArray(page.toString()) ?: return emptyList()
         val areas = mutableListOf<RectF>()
         for (index in 0 until bounds.length()) {
@@ -123,4 +129,49 @@ class MushafHitMap(private val context: Context) {
     private fun imageY(page: Int, sourceY: Float, height: Int): Float =
         if (page <= 2) (200f + (sourceY - 125f) * 245f / 589f) * height / 645f
         else (sourceY - 24f) * height / 1590f
+}
+
+/** The high-resolution source shifts verse endings relative to the 442 px pages. */
+internal object PageThreeHighResMap {
+    private data class Segment(val line: Int, val ayah: Int, val left: Float, val right: Float) {
+        val top: Float get() = (12 + (line - 1) * 96).toFloat()
+        val bottom: Float get() = (minOf(1440, 108 + (line - 1) * 96)).toFloat()
+        fun rect() = RectF(left, top, right, bottom)
+    }
+
+    // Boundaries are the centers of the original printed verse markers. The
+    // original Arabic numeral pixels remain in the high-resolution artwork.
+    private val segments = listOf(
+        Segment(1, 6, 24f, 1056f),
+        Segment(2, 6, 802f, 1056f), Segment(2, 7, 24f, 802f),
+        Segment(3, 7, 285f, 1056f), Segment(3, 8, 24f, 285f),
+        Segment(4, 8, 24f, 1056f),
+        Segment(5, 9, 24f, 1056f),
+        Segment(6, 9, 761f, 1056f), Segment(6, 10, 24f, 761f),
+        Segment(7, 10, 327f, 1056f), Segment(7, 11, 24f, 327f),
+        Segment(8, 11, 24f, 1056f),
+        Segment(9, 12, 243f, 1056f), Segment(9, 13, 24f, 243f),
+        Segment(10, 13, 24f, 1056f),
+        Segment(11, 13, 284f, 1056f), Segment(11, 14, 24f, 284f),
+        Segment(12, 14, 24f, 1056f),
+        Segment(13, 14, 508f, 1056f), Segment(13, 15, 24f, 508f),
+        Segment(14, 15, 628f, 1056f), Segment(14, 16, 24f, 628f),
+        Segment(15, 16, 24f, 1056f)
+    )
+
+    fun verseAt(x: Float, y: Float): VerseReference? {
+        val segment = segments.firstOrNull {
+            x >= it.left && x <= it.right && y >= it.top + 4f && y <= it.bottom - 4f
+        } ?: return null
+        // Avoid assigning a long press on a marker to the wrong adjacent ayah.
+        if (segments.any {
+                it.line == segment.line && it.ayah != segment.ayah &&
+                    (abs(x - it.left) < 30f || abs(x - it.right) < 30f)
+            }) return null
+        return VerseReference(2, segment.ayah)
+    }
+
+    fun areasFor(reference: VerseReference): List<RectF> =
+        if (reference.surah == 2) segments.filter { it.ayah == reference.ayah }.map { it.rect() }
+        else emptyList()
 }
