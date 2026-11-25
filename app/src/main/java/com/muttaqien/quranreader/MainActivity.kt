@@ -104,6 +104,19 @@ private val Ink = Color(0xFF222423)
 private val Gold = Color(0xFFB89A65)
 private val ArabicBlack = Color(0xFF080808)
 private val LightLine = Color(0xFFE6E4DC)
+private val ReaderChromeScheme = darkColorScheme(
+    primary = Brand, onPrimary = TextWhite,
+    background = Background, onBackground = TextWhite,
+    surface = SurfaceBlack, onSurface = TextWhite,
+    surfaceVariant = CardsBlack, secondary = Brand,
+)
+
+@Composable
+private fun ReaderChrome(content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = ReaderChromeScheme) {
+        Surface(color = CardsBlack) { content() }
+    }
+}
 
 class MainActivity : ComponentActivity() {
     private val player = VersePlayer()
@@ -114,12 +127,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val preferences = remember { getSharedPreferences("reader", MODE_PRIVATE) }
             var night by remember { mutableStateOf(preferences.getBoolean("night", false)) }
-            val palette = if (night) darkColorScheme(
-                primary = Brand, onPrimary = TextWhite,
-                background = Background, onBackground = TextWhite,
-                surface = SurfaceBlack, onSurface = TextWhite,
-                surfaceVariant = CardsBlack, secondary = Brand,
-            ) else lightColorScheme(
+            val palette = if (night) ReaderChromeScheme else lightColorScheme(
                 primary = Brand, onPrimary = TextWhite,
                 background = Color(0xFFF7F6F2), surface = Paper,
                 onSurface = Ink, secondary = Gold,
@@ -324,7 +332,7 @@ private fun QuranApp(
     }
     BackHandler(selected != null) { backToIndex() }
 
-    Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
+    Scaffold(containerColor = if (selected != null && mode == 0) Background else MaterialTheme.colorScheme.background) { padding ->
         if (selected == null) {
             IndexScreen(
                 surahs, tab, onTab = { tab = it }, bookmarks, lastRead,
@@ -338,7 +346,7 @@ private fun QuranApp(
         } else {
             val verses = chapter?.verses.orEmpty()
             val topControls: @Composable () -> Unit = {
-                Surface(color = if (night) CardsBlack else Paper) {
+                ReaderChrome {
                     Column {
                         ReaderHeader(
                             if (mode == 0) pageVerses.firstOrNull()?.surahName ?: "Mushaf Madinah" else selected!!.name,
@@ -380,7 +388,7 @@ private fun QuranApp(
                 }
             }
             val bottomControls: @Composable () -> Unit = {
-                Surface(color = if (night) CardsBlack else Paper) {
+                ReaderChrome {
                     Column {
                         if (mode == 0) {
                             Text(
@@ -406,7 +414,7 @@ private fun QuranApp(
                         }
                         PlayerBar(
                             player, currentVerse, verses.size,
-                            audioUrls.isEmpty() && audioError == null, night,
+                            audioUrls.isEmpty() && audioError == null,
                             onPrevious = { startVerse((currentVerse - 1).coerceAtLeast(0)) },
                             onNext = { startVerse((currentVerse + 1).coerceAtMost(verses.lastIndex)) },
                             onToggle = {
@@ -942,10 +950,9 @@ private fun ReciterSelector(selected: Reciter, onSelect: (Reciter) -> Unit) {
 @Composable
 private fun PlayerBar(
     player: VersePlayer, verse: Int, count: Int, audioLoading: Boolean,
-    night: Boolean,
     onPrevious: () -> Unit, onNext: () -> Unit, onToggle: () -> Unit
 ) {
-    Surface(color = if (night) SurfaceBlack else Paper, shadowElevation = 2.dp) {
+    Surface(color = SurfaceBlack, shadowElevation = 2.dp) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
             if (verse >= 0) {
                 Text(
@@ -956,13 +963,13 @@ private fun PlayerBar(
             if (player.error != null) Text(player.error!!, color = Color(0xFFFFA598), fontSize = 12.sp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onPrevious, modifier = Modifier.semantics { contentDescription = "Previous verse" }, enabled = verse > 0 && !audioLoading) {
-                    Text("‹", color = if (verse > 0 && !audioLoading) { if (night) TextWhite else Ink } else Color.Gray, fontSize = 26.sp)
+                    Text("‹", color = if (verse > 0 && !audioLoading) TextWhite else Color.Gray, fontSize = 26.sp)
                 }
                 Button(onClick = onToggle, enabled = !audioLoading && !player.loading) {
                     Text(if (player.playing) "Pause" else "Play")
                 }
                 TextButton(onClick = onNext, modifier = Modifier.semantics { contentDescription = "Next verse" }, enabled = verse in 0 until count - 1 && !audioLoading) {
-                    Text("›", color = if (verse in 0 until count - 1 && !audioLoading) { if (night) TextWhite else Ink } else Color.Gray, fontSize = 26.sp)
+                    Text("›", color = if (verse in 0 until count - 1 && !audioLoading) TextWhite else Color.Gray, fontSize = 26.sp)
                 }
             }
         }
