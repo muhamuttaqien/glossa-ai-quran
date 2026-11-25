@@ -216,7 +216,6 @@ private fun QuranApp(
     var pageTranslationError by remember { mutableStateOf<String?>(null) }
     var pageTranslationRetry by remember { mutableIntStateOf(0) }
     val verseListState = rememberLazyListState()
-    val pageSwipeThreshold = with(LocalDensity.current) { 64.dp.toPx() }
 
     fun openSurah(surah: Surah, ayah: Int = 1) {
         player.stop()
@@ -437,17 +436,13 @@ private fun QuranApp(
             )
         } else {
             val verses = chapter?.verses.orEmpty()
+            val pageSurahNumber = hitMap.firstVerseOn(currentPage)?.surah
+            val pageSurahName = surahs.firstOrNull { it.number == pageSurahNumber }?.name
+                ?: selected!!.name
             val topControls: @Composable () -> Unit = {
                 ReaderChrome {
                     Column {
-                        ReaderHeader(
-                            if (mode == 0) pageVerses.firstOrNull()?.surahName ?: "Mushaf Madinah"
-                            else pageTranslations.firstOrNull()?.surah?.name
-                                ?: surahs.firstOrNull {
-                                    it.number == hitMap.firstVerseOn(currentPage)?.surah
-                                }?.name ?: selected!!.name,
-                            night, onToggleNight, ::backToIndex
-                        )
+                        ReaderHeader(pageSurahName, night, onToggleNight, ::backToIndex)
                         Row(Modifier.fillMaxWidth()) {
                             listOf("Read Arabic", "Translation").forEachIndexed { index, label ->
                                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -471,7 +466,7 @@ private fun QuranApp(
                                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text(pageVerses.firstOrNull()?.surahName ?: "Page $currentPage", fontSize = 13.sp)
+                                Text(pageSurahName, fontSize = 13.sp)
                                 Text(pageVerses.firstOrNull()?.let { "Juz ${it.juz}" } ?: "", fontSize = 13.sp)
                             }
                         } else {
@@ -577,31 +572,6 @@ private fun QuranApp(
                             Loading()
                         } else LazyColumn(
                             Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-                                .pointerInput(currentPage, pageSwipeThreshold) {
-                                    var drag = 0f
-                                    detectHorizontalDragGestures(
-                                        onDragEnd = {
-                                            val nextPage = when {
-                                                drag >= pageSwipeThreshold && currentPage < 604 -> currentPage + 1
-                                                drag <= -pageSwipeThreshold && currentPage > 1 -> currentPage - 1
-                                                else -> currentPage
-                                            }
-                                            drag = 0f
-                                            if (nextPage != currentPage) {
-                                                currentPage = nextPage
-                                                bookmarkedTarget = null
-                                                hitMap.firstVerseOn(nextPage)?.let {
-                                                    markRead(it.surah, it.ayah)
-                                                }
-                                            }
-                                        },
-                                        onDragCancel = { drag = 0f },
-                                        onHorizontalDrag = { change, amount ->
-                                            drag += amount
-                                            change.consume()
-                                        }
-                                    )
-                                }
                                 .semantics {
                                     customActions = listOf(
                                         CustomAccessibilityAction(
