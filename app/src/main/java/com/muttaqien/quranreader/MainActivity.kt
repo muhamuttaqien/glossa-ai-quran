@@ -16,6 +16,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -77,7 +78,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -503,7 +503,11 @@ private fun QuranApp(
                 ) {
                     Text(
                         "Listen",
-                        Modifier.clickable(enabled = audioReady, role = Role.Button) {
+                        Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            enabled = audioReady
+                        ) {
                             focusedAyah = null
                             startVerse(ayah.number - 1)
                         }.padding(vertical = 12.dp),
@@ -514,7 +518,10 @@ private fun QuranApp(
                         "Bookmark",
                         Modifier.semantics {
                             stateDescription = if (isBookmarked) "Bookmarked" else "Not bookmarked"
-                        }.clickable(role = Role.Button) {
+                        }.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
                             toggleBookmark(selected!!.number, ayah.number)
                         }.padding(vertical = 12.dp),
                         color = if (isBookmarked) Gold else MaterialTheme.colorScheme.primary,
@@ -522,7 +529,10 @@ private fun QuranApp(
                     )
                     Text(
                         "Share",
-                        Modifier.clickable(role = Role.Button) { shareAyah(ayah) }
+                        Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { shareAyah(ayah) }
                             .padding(vertical = 12.dp),
                         color = MaterialTheme.colorScheme.primary,
                         textDecoration = TextDecoration.None
