@@ -115,6 +115,7 @@ private val Gold = Color(0xFFB89A65)
 private val ArabicBlack = Color(0xFF080808)
 private val QuranArabicFont = FontFamily(Font(R.font.qpc_hafs_v22))
 private val LightLine = Color(0xFFE6E4DC)
+private const val ReaderChromeAnimationDurationMs = 380
 private val ReaderChromeScheme = darkColorScheme(
     primary = Brand, onPrimary = TextWhite,
     background = Background, onBackground = TextWhite,
@@ -625,14 +626,14 @@ private fun QuranApp(
                     AnimatedVisibility(
                         visible = chromeVisible,
                         modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
-                        enter = slideInVertically(animationSpec = tween(220)) { -it } + fadeIn(tween(220)),
-                        exit = slideOutVertically(animationSpec = tween(220)) { -it } + fadeOut(tween(220))
+                        enter = slideInVertically(animationSpec = tween(ReaderChromeAnimationDurationMs)) { -it } + fadeIn(tween(ReaderChromeAnimationDurationMs)),
+                        exit = slideOutVertically(animationSpec = tween(ReaderChromeAnimationDurationMs)) { -it } + fadeOut(tween(ReaderChromeAnimationDurationMs))
                     ) { topControls() }
                     AnimatedVisibility(
                         visible = chromeVisible,
                         modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
-                        enter = slideInVertically(animationSpec = tween(220)) { it } + fadeIn(tween(220)),
-                        exit = slideOutVertically(animationSpec = tween(220)) { it } + fadeOut(tween(220))
+                        enter = slideInVertically(animationSpec = tween(ReaderChromeAnimationDurationMs)) { it } + fadeIn(tween(ReaderChromeAnimationDurationMs)),
+                        exit = slideOutVertically(animationSpec = tween(ReaderChromeAnimationDurationMs)) { it } + fadeOut(tween(ReaderChromeAnimationDurationMs))
                     ) { bottomControls() }
                 }
             } else {
