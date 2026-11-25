@@ -58,6 +58,10 @@ class MushafHitMap(private val context: Context) {
         if (page == 3 && width == 1000 && height == 1902) {
             return PageThreeHighResMap.verseAt(x, y)
         }
+        if (page == 4 && width == 491 && height == 914) {
+            val originalY = PageFourSpacedMap.originalY(y) ?: return null
+            return verseAt(page, x, originalY, 491, 802)
+        }
         // The opening pages have ornamental frames and a different text canvas.
         if (page <= 2 && (width != 442 || height != 645)) return null
 
@@ -110,6 +114,12 @@ class MushafHitMap(private val context: Context) {
         if (page == 3 && width == 1000 && height == 1902) {
             return PageThreeHighResMap.areasFor(reference)
         }
+        if (page == 4 && width == 491 && height == 914) {
+            return areasFor(page, reference, 491, 802).map { area ->
+                RectF(area.left, PageFourSpacedMap.displayY(area.top),
+                    area.right, PageFourSpacedMap.displayY(area.bottom))
+            }
+        }
         val bounds = pages.optJSONArray(page.toString()) ?: return emptyList()
         val areas = mutableListOf<RectF>()
         for (index in 0 until bounds.length()) {
@@ -129,6 +139,30 @@ class MushafHitMap(private val context: Context) {
     private fun imageY(page: Int, sourceY: Float, height: Int): Float =
         if (page <= 2) (200f + (sourceY - 125f) * 245f / 589f) * height / 645f
         else (sourceY - 24f) * height / 1590f
+}
+
+/** Undo or apply the eight transparent pixels inserted after each page 4 line. */
+internal object PageFourSpacedMap {
+    private val cuts = intArrayOf(
+        51, 109, 158, 212, 265, 317, 373, 425, 480, 536, 585, 644, 693, 746
+    )
+    private const val gap = 8
+
+    fun originalY(displayY: Float): Float? {
+        var start = 0f
+        for (line in 0..cuts.size) {
+            val end = (if (line == cuts.size) 802 else cuts[line]).toFloat()
+            val offset = line * gap
+            if (displayY >= start + offset && displayY < end + offset) {
+                return displayY - offset
+            }
+            start = end
+        }
+        return null
+    }
+
+    fun displayY(originalY: Float): Float =
+        originalY + gap * cuts.count { originalY >= it }
 }
 
 /** The high-resolution source shifts verse endings relative to the 442 px pages. */
