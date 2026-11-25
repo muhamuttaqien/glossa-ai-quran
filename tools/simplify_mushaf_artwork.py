@@ -21,6 +21,9 @@ from style_mushaf_frames import opening_page, save_exact_palette, title_bands
 
 
 RED = (196, 107, 107, 255)  # #C46B6B; the app maps this to #B87575 at night.
+MOTIF = Image.open(
+    Path(__file__).resolve().parent.parent / "design/surah-title-floral-mask.png"
+).convert("RGBA")
 OPENING_MARKERS = {
     1: [(154, 216), (124, 250), (97, 284), (240, 287),
         (146, 324), (218, 361), (170, 432)],
@@ -59,43 +62,22 @@ def marker_centers(original, page):
     return centers
 
 
-def cubic(p0, p1, p2, p3, steps=28):
-    return [((1-t)**3 * p0[0] + 3*(1-t)**2*t*p1[0] + 3*(1-t)*t*t*p2[0] + t**3*p3[0],
-             (1-t)**3 * p0[1] + 3*(1-t)**2*t*p1[1] + 3*(1-t)*t*t*p2[1] + t**3*p3[1])
-            for t in np.linspace(0, 1, steps)]
-
-
 def draw_banner(width, height, y1, y2):
-    """Thin rectangle and restrained mirrored floral lines around source title."""
+    """Use the user's floral artwork silhouette, retaining printed Arabic titles."""
     banner = Image.new("RGBA", (width, height))
     draw = ImageDraw.Draw(banner)
     top, bottom = y1 + 5, y2 - 5
-    center = (top + bottom) / 2
     draw.rectangle((4, top, width - 5, bottom), outline=RED, width=1)
-
-    def side(mirror):
-        def point(x, y):
-            return (width - 1 - x if mirror else x, y)
-
-        curves = [
-            ((7, center + 4), (30, center + 18), (45, center - 12), (105, center)),
-            ((22, center + 6), (31, center - 4), (41, top + 3), (56, top + 2)),
-            ((47, center - 2), (60, center + 8), (68, bottom - 2), (91, bottom - 2)),
-        ]
-        for curve in curves:
-            draw.line([point(*p) for p in cubic(*curve)], fill=RED, width=1)
-        for flower_x, flower_y, radius in ((28, center, 7), (81, center - 6, 5)):
-            for dx, dy in ((0, -radius), (radius, 0), (0, radius), (-radius, 0)):
-                x, y = point(flower_x + dx, flower_y + dy)
-                draw.ellipse((x - 3, y - 3, x + 3, y + 3), outline=RED, width=1)
-            x, y = point(flower_x, flower_y)
-            draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=RED)
-        for leaf_x, leaf_y in ((50, center - 11), (65, center + 9), (99, center - 3)):
-            x, y = point(leaf_x, leaf_y)
-            draw.ellipse((x - 4, y - 2, x + 4, y + 2), outline=RED, width=1)
-
-    side(False)
-    side(True)
+    side_height = bottom - top + 1
+    for crop, x in ((MOTIF.crop((0, 0, 82, 32)), 4),
+                    (MOTIF.crop((272, 0, 357, 32)), None)):
+        side_width = round(crop.width * side_height / crop.height)
+        scaled = crop.resize((side_width, side_height), Image.Resampling.LANCZOS)
+        red = Image.new("RGBA", scaled.size, RED)
+        opacity = np.asarray(scaled.getchannel("A"), dtype=np.uint16)
+        opacity = ((opacity + 8) // 17 * 17).clip(0, 255).astype(np.uint8)
+        red.putalpha(Image.fromarray(opacity, "L"))
+        banner.alpha_composite(red, (width - 4 - side_width if x is None else x, top))
     return np.asarray(banner)
 
 
