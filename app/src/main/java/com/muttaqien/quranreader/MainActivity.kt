@@ -918,7 +918,7 @@ private fun MushafPage(
             (if (night) MushafNightPalette.convert(bitmap) else bitmap).asImageBitmap()
         } else null
     }
-    val pageColor = if (night) CardsBlack else Paper
+    val pageColor = if (night) Color.Black else Paper
     val swipeThreshold = with(LocalDensity.current) { 64.dp.toPx() }
     var pageWidth by remember { mutableIntStateOf(0) }
     var dragOffset by remember(page) { mutableFloatStateOf(0f) }
