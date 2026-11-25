@@ -11,6 +11,10 @@ Android reader with Uthmani Arabic text (Hafs), English and Indonesian translati
 - Tap an ayah to listen; playback advances through the rest of the surah. Previous, pause/resume and next controls are included.
 - All Arabic Mushaf pages and ayah hit boxes are bundled. Previously opened surahs, page metadata, juz starting points and audio URL lists are cached; a newly opened surah and audio streams need internet. The selected qari and display mode are remembered.
 
+## Preview
+
+The [v1.3 reading preview](preview/glossa-quran-v1.3-preview.png) shows page 2 in both themes with the reading controls visible after a tap. It is a mockup composed from the bundled Mushaf artwork, not a device screenshot.
+
 ## Run
 
 Open this directory in Android Studio with JDK 17 and Android SDK 35 installed. Sync Gradle, then run the `app` configuration on an Android 8.0+ device or emulator with internet access. Alternatively, run `./gradlew assembleDebug` after configuring the SDK. The debug APK is written to `app/build/outputs/apk/debug/`.
