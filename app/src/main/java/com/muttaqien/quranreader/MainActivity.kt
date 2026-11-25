@@ -115,8 +115,6 @@ private val Gold = Color(0xFFB89A65)
 private val ArabicBlack = Color(0xFF080808)
 private val QuranArabicFont = FontFamily(Font(R.font.qpc_hafs_v22))
 private val LightLine = Color(0xFFE6E4DC)
-private val BookmarkGrayLight = Color(0xFF626262)
-private val BookmarkGrayDark = Color(0xFFAAAAAA)
 private val ReaderChromeScheme = darkColorScheme(
     primary = Brand, onPrimary = TextWhite,
     background = Background, onBackground = TextWhite,
@@ -200,6 +198,7 @@ private fun QuranApp(
     var audioRetry by remember { mutableIntStateOf(0) }
     var currentVerse by remember { mutableIntStateOf(-1) }
     var focusedAyah by remember { mutableStateOf<Ayah?>(null) }
+    var bookmarkedTarget by remember { mutableStateOf<VerseReference?>(null) }
     var pendingFocusedAyah by remember { mutableStateOf<VerseReference?>(null) }
     var currentPage by rememberSaveable { mutableIntStateOf(1) }
     var pageVerses by remember { mutableStateOf<List<PageVerse>>(emptyList()) }
@@ -209,13 +208,22 @@ private fun QuranApp(
         player.stop()
         currentVerse = -1
         focusedAyah = null
+        bookmarkedTarget = null
         pendingFocusedAyah = null
         chapter = null
         audioUrls = emptyMap()
         startAyah = ayah
+        hitMap.pageFor(VerseReference(surah.number, ayah))?.let { currentPage = it }
         selected = surah
         chromeVisible = false
         openRevision++
+    }
+
+    fun openBookmarked(surah: Surah, ayah: Int) {
+        openSurah(surah, ayah)
+        bookmarkedTarget = VerseReference(surah.number, ayah)
+        mode = 0
+        preferences.edit { putInt("mode", 0) }
     }
 
     fun markRead(surah: Int, ayah: Int) {
@@ -234,6 +242,7 @@ private fun QuranApp(
         } else {
             val ayah = chapter?.verses?.firstOrNull { it.number == reference.ayah }
                 ?: return
+            bookmarkedTarget = null
             focusedAyah = ayah
             markRead(reference.surah, reference.ayah)
         }
@@ -295,11 +304,12 @@ private fun QuranApp(
         catch (_: Exception) { audioError = "Couldn't load recitation. Try again." }
     }
     LaunchedEffect(selected?.number, chapter) {
-        if (selected == null) return@LaunchedEffect
+        val surah = selected ?: return@LaunchedEffect
         val verses = chapter?.verses ?: return@LaunchedEffect
         val index = (startAyah - 1).coerceIn(0, verses.lastIndex)
-        verseListState.requestScrollToItem(index)
-        currentPage = verses[index].page
+        currentPage = hitMap.pageFor(VerseReference(surah.number, verses[index].number))
+            ?: verses[index].page
+        verseListState.scrollToItem(index)
     }
     LaunchedEffect(chapter, selected?.number, pendingFocusedAyah) {
         val reference = pendingFocusedAyah ?: return@LaunchedEffect
@@ -341,6 +351,7 @@ private fun QuranApp(
         currentVerse = -1
         selected = null
         focusedAyah = null
+        bookmarkedTarget = null
         pendingFocusedAyah = null
     }
     BackHandler(selected != null) { backToIndex() }
@@ -352,6 +363,7 @@ private fun QuranApp(
                 error = listError, juzError = juzError,
                 retry = { listRetry++ },
                 open = ::openSurah,
+                openBookmarked = ::openBookmarked,
                 openJuz = { pendingJuz = it },
                 night = night,
                 modifier = Modifier.padding(padding)
@@ -425,9 +437,18 @@ private fun QuranApp(
                                 TextButton(onClick = { audioRetry++ }) { Text("Retry") }
                             }
                         }
+                        if (mode == 0 && chapterError != null) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(chapterError!!, Modifier.weight(1f), color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                                TextButton(onClick = { chapterRetry++ }) { Text("Retry") }
+                            }
+                        }
                         PlayerBar(
                             player, currentVerse, verses.size,
-                            audioUrls.isEmpty() && audioError == null,
+                            verses.isEmpty() || (audioUrls.isEmpty() && audioError == null),
                             onPrevious = { startVerse((currentVerse - 1).coerceAtLeast(0)) },
                             onNext = { startVerse((currentVerse + 1).coerceAtMost(verses.lastIndex)) },
                             onToggle = {
@@ -443,17 +464,19 @@ private fun QuranApp(
                 }
             }
 
-            if (chapter != null && chapterError == null) {
+            if (mode == 0 || (chapter != null && chapterError == null)) {
                 Box(Modifier.fillMaxSize().padding(padding)) {
                     if (mode == 0) {
                         MushafPage(
                             currentPage, night, hitMap,
-                            selectedAyah = focusedAyah?.let { VerseReference(selected!!.number, it.number) },
+                            selectedAyah = focusedAyah?.let { VerseReference(selected!!.number, it.number) }
+                                ?: bookmarkedTarget,
                             chromeVisible = chromeVisible,
                             onToggleControls = { chromeVisible = !chromeVisible },
                             onPrevious = {
                                 if (currentPage > 1) {
                                     currentPage--
+                                    bookmarkedTarget = null
                                     hitMap.firstVerseOn(currentPage)?.let {
                                         markRead(it.surah, it.ayah)
                                     }
@@ -462,6 +485,7 @@ private fun QuranApp(
                             onNext = {
                                 if (currentPage < 604) {
                                     currentPage++
+                                    bookmarkedTarget = null
                                     hitMap.firstVerseOn(currentPage)?.let {
                                         markRead(it.surah, it.ayah)
                                     }
@@ -573,7 +597,7 @@ private fun QuranApp(
                         ) {
                             toggleBookmark(selected!!.number, ayah.number)
                         }.padding(vertical = 12.dp),
-                        color = if (isBookmarked) Brand else if (night) BookmarkGrayDark else BookmarkGrayLight,
+                        color = Brand,
                         textDecoration = TextDecoration.None
                     )
                     Text(
@@ -599,7 +623,8 @@ private fun IndexScreen(
     surahs: List<Surah>, tab: Int, onTab: (Int) -> Unit,
     bookmarks: Set<String>, lastRead: VerseReference,
     error: String?, juzError: String?, retry: () -> Unit,
-    open: (Surah, Int) -> Unit, openJuz: (Int) -> Unit,
+    open: (Surah, Int) -> Unit, openBookmarked: (Surah, Int) -> Unit,
+    openJuz: (Int) -> Unit,
     night: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -686,7 +711,7 @@ private fun IndexScreen(
                 LazyColumn(Modifier.weight(1f)) {
                     items(entries, key = { "${it.first.number}:${it.second}" }) { (surah, ayah) ->
                         Row(
-                            Modifier.fillMaxWidth().clickable { open(surah, ayah) }.padding(22.dp),
+                            Modifier.fillMaxWidth().clickable { openBookmarked(surah, ayah) }.padding(22.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("${surah.name} • Verse $ayah", Modifier.weight(1f))
@@ -1008,7 +1033,7 @@ private fun AyahCard(
                             text = {
                                 Text(
                                     if (isBookmarked) "Bookmarked" else "Bookmark",
-                                    color = if (isBookmarked) Brand else if (night) BookmarkGrayDark else BookmarkGrayLight
+                                    color = Brand
                                 )
                             },
                             modifier = Modifier.semantics {
