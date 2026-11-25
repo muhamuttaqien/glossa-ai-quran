@@ -71,7 +71,38 @@ def markers(image, templates, page, expected):
                 hits.append((cx, cy, mask))
         if len(hits)==expected:
             break
-    return sorted(hits, key=lambda m: (round((m[1]-52)/93), -m[0]))
+    if len(hits) != expected:
+        raise ValueError(f"Page {page}: found {len(hits)}/{expected} source ornaments")
+
+    # The first template can detect an ornament with a modest correlation yet
+    # erase the wrong outline. Pick the best matching *shape* at each detected
+    # location before removing it; otherwise faint portions of another style's
+    # original ring survive outside the new red circle.
+    refined = []
+    for cx, cy, _ in hits:
+        best = None
+        for template, ring in templates:
+            h, w = template.shape
+            left = max(0, cx - w//2 - 7)
+            top = max(0, cy - h//2 - 7)
+            right = min(a.shape[1], cx - w//2 + w + 8)
+            bottom = min(a.shape[0], cy - h//2 + h + 8)
+            if right-left < w or bottom-top < h:
+                continue
+            scores = cv2.matchTemplate(a[top:bottom, left:right], template,
+                                       cv2.TM_CCOEFF_NORMED)
+            _, score, _, (dx, dy) = cv2.minMaxLoc(scores)
+            x, y = left + dx, top + dy
+            candidate = (score, x + w//2, y + h//2, x, y, ring)
+            if best is None or score > best[0]:
+                best = candidate
+        if best is None or best[0] < .45:
+            raise ValueError(f"Page {page}: uncertain ornament at {(cx, cy)}")
+        _, cx, cy, x, y, ring = best
+        mask = np.zeros(a.shape, bool)
+        mask[y:y+ring.shape[0], x:x+ring.shape[1]] = ring
+        refined.append((cx, cy, mask))
+    return sorted(refined, key=lambda m: (round((m[1]-52)/93), -m[0]))
 
 
 def erase_and_redraw(image, positions, page):
@@ -80,6 +111,30 @@ def erase_and_redraw(image, positions, page):
         # The numeral is a distinct source ink component. Remove only the
         # matched outer ornament and its one-pixel antialias fringe.
         a[cv2.dilate(mask.astype("uint8"),np.ones((3,3),np.uint8)).astype(bool)] = 0
+    if page > 3:
+        # A few source ornaments have separate tiny loops, not connected to
+        # the matched outer ring. Remove only small fragments alongside that
+        # ring; keep the center numeral and any ink continuing into a letter.
+        _, labels, stats, _ = cv2.connectedComponentsWithStats((a > 8).astype("uint8"), 8)
+        for cx, cy, mask in positions:
+            x1, x2 = max(0,cx-46), min(a.shape[1],cx+47)
+            y1, y2 = max(0,cy-40), min(a.shape[0],cy+41)
+            nearby = cv2.dilate(mask[y1:y2,x1:x2].astype("uint8"),
+                                np.ones((11,11),np.uint8)).astype(bool)
+            center = labels[max(0,cy-18):cy+19,max(0,cx-18):cx+19]
+            local_labels = labels[y1:y2,x1:x2]
+            for label in np.unique(local_labels[nearby]):
+                if not label:
+                    continue
+                x, y, w, h, area = stats[label]
+                if (area > 120 or x < x1 or y < y1 or x+w > x2 or y+h > y2
+                        or np.any(center == label)):
+                    continue
+                fragment = local_labels == label
+                if np.count_nonzero(fragment & nearby) < .75*area:
+                    continue
+                crop = a[y:y+h,x:x+w]
+                crop[labels[y:y+h,x:x+w] == label] = 0
     # The WebP RGB channels carry a gray haze even where alpha already encodes
     # the antialias edge. Page 3's crisp pilot used black ink with that alpha.
     result = Image.new("RGBA", image.size, (0, 0, 0, 0))
