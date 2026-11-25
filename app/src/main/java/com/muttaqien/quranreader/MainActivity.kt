@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -60,7 +61,11 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -558,9 +563,15 @@ private fun SurahRow(surah: Surah, night: Boolean, open: () -> Unit) {
 private fun ReaderHeader(title: String, night: Boolean, toggleNight: () -> Unit, back: () -> Unit) {
     Surface(color = SurfaceBlack) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = back) { Text("‹ Back", color = TextWhite) }
+            IconButton(onClick = back, modifier = Modifier.semantics { contentDescription = "Back to index" }) {
+                Text("‹", color = TextWhite, fontSize = 28.sp)
+            }
             Text(title, Modifier.weight(1f), color = TextWhite, textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold)
-            TextButton(onClick = toggleNight) { Text(if (night) "☀" else "☾", color = TextWhite, fontSize = 22.sp) }
+            IconButton(onClick = toggleNight, modifier = Modifier.semantics {
+                contentDescription = if (night) "Switch to light mode" else "Switch to dark mode"
+            }) {
+                Text(if (night) "☀" else "☾", color = TextWhite, fontSize = 22.sp)
+            }
         }
     }
 }
@@ -579,6 +590,7 @@ private fun MushafPage(
     }
     val pageColor = if (night) CardsBlack else Paper
     val pageText = if (night) TextWhite else Ink
+    val swipeThreshold = with(LocalDensity.current) { 64.dp.toPx() }
     // Keep the fixed page layout and glyphs; only remap its luminance for night reading.
     val nightFilter = remember {
         ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
@@ -589,22 +601,52 @@ private fun MushafPage(
         )))
     }
     Surface(modifier.fillMaxWidth().padding(vertical = 4.dp), color = pageColor) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp)) {
+        Column(
+            Modifier.fillMaxSize().pointerInput(page, swipeThreshold) {
+                var totalDrag = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { totalDrag = 0f },
+                    onDragEnd = {
+                        when {
+                            totalDrag <= -swipeThreshold -> onNext()
+                            totalDrag >= swipeThreshold -> onPrevious()
+                        }
+                        totalDrag = 0f
+                    },
+                    onDragCancel = { totalDrag = 0f },
+                    onHorizontalDrag = { change, dragAmount ->
+                        totalDrag += dragAmount
+                        change.consume()
+                    }
+                )
+            }.padding(horizontal = 14.dp, vertical = 8.dp)
+        ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(verses.firstOrNull()?.surahName ?: "Page $page", color = pageText, fontSize = 13.sp)
                 Text(verses.firstOrNull()?.let { "Juz ${it.juz}" } ?: "", color = pageText, fontSize = 13.sp)
             }
             Image(
-                bitmap = image, contentDescription = "Mushaf Madinah Hafs page $page. Tap to choose a verse.",
-                modifier = Modifier.fillMaxWidth().weight(1f).clickable(onClick = onOpenVerses),
+                bitmap = image, contentDescription = "Mushaf Madinah Hafs page $page. Tap to choose a verse. Swipe left or right to change pages.",
+                modifier = Modifier.fillMaxWidth().weight(1f)
+                    .semantics {
+                        customActions = listOf(
+                            CustomAccessibilityAction("Next page") {
+                                if (page < 604) { onNext(); true } else false
+                            },
+                            CustomAccessibilityAction("Previous page") {
+                                if (page > 1) { onPrevious(); true } else false
+                            }
+                        )
+                    }
+                    .clickable(onClick = onOpenVerses),
                 contentScale = ContentScale.Fit,
                 colorFilter = if (night) nightFilter else null
             )
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onPrevious, enabled = page > 1) { Text("‹ Previous") }
-                Text("$page / 604", Modifier.weight(1f), color = pageText, textAlign = TextAlign.Center, fontSize = 13.sp)
-                TextButton(onClick = onNext, enabled = page < 604) { Text("Next ›") }
-            }
+            Text(
+                "$page / 604",
+                Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                color = pageText, textAlign = TextAlign.Center, fontSize = 13.sp
+            )
             error?.let { Text(it, color = Color(0xFF9B3333), fontSize = 11.sp) }
         }
     }
