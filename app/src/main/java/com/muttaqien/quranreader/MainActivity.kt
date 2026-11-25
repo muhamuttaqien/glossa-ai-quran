@@ -227,11 +227,15 @@ private fun QuranApp(
         openRevision++
     }
 
-    fun openBookmarked(surah: Surah, ayah: Int) {
+    fun openReadArabic(surah: Surah, ayah: Int) {
         openSurah(surah, ayah)
-        bookmarkedTarget = VerseReference(surah.number, ayah)
         mode = 0
         preferences.edit { putInt("mode", 0) }
+    }
+
+    fun openBookmarked(surah: Surah, ayah: Int) {
+        openReadArabic(surah, ayah)
+        bookmarkedTarget = VerseReference(surah.number, ayah)
     }
 
     fun markRead(surah: Int, ayah: Int) {
@@ -245,7 +249,7 @@ private fun QuranApp(
     fun openPageAyah(reference: VerseReference) {
         val surah = surahs.firstOrNull { it.number == reference.surah } ?: return
         if (selected?.number != reference.surah) {
-            openSurah(surah, reference.ayah)
+            openReadArabic(surah, reference.ayah)
             pendingFocusedAyah = reference
         } else {
             val ayah = chapter?.verses?.firstOrNull { it.number == reference.ayah }
@@ -289,7 +293,7 @@ private fun QuranApp(
             val reference = repository.juzStart(number)
             val surah = surahs.firstOrNull { it.number == reference.surah }
                 ?: error("Surah list is not ready")
-            openSurah(surah, reference.ayah)
+            openReadArabic(surah, reference.ayah)
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) { juzError = "Couldn't open Juz $number. Try again." }
         finally { pendingJuz = null }
@@ -408,7 +412,7 @@ private fun QuranApp(
                 surahs, tab, onTab = { tab = it }, bookmarks, lastRead,
                 error = listError, juzError = juzError,
                 retry = { listRetry++ },
-                open = ::openSurah,
+                open = ::openReadArabic,
                 openBookmarked = ::openBookmarked,
                 openJuz = { pendingJuz = it },
                 night = night,
