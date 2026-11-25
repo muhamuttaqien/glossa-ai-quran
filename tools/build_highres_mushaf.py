@@ -71,7 +71,38 @@ def markers(image, templates, page, expected):
                 hits.append((cx, cy, mask))
         if len(hits)==expected:
             break
-    return sorted(hits, key=lambda m: (round((m[1]-52)/93), -m[0]))
+    if len(hits) != expected:
+        raise ValueError(f"Page {page}: found {len(hits)}/{expected} source ornaments")
+
+    # The first template can detect an ornament with a modest correlation yet
+    # erase the wrong outline. Pick the best matching *shape* at each detected
+    # location before removing it; otherwise faint portions of another style's
+    # original ring survive outside the new red circle.
+    refined = []
+    for cx, cy, _ in hits:
+        best = None
+        for template, ring in templates:
+            h, w = template.shape
+            left = max(0, cx - w//2 - 7)
+            top = max(0, cy - h//2 - 7)
+            right = min(a.shape[1], cx - w//2 + w + 8)
+            bottom = min(a.shape[0], cy - h//2 + h + 8)
+            if right-left < w or bottom-top < h:
+                continue
+            scores = cv2.matchTemplate(a[top:bottom, left:right], template,
+                                       cv2.TM_CCOEFF_NORMED)
+            _, score, _, (dx, dy) = cv2.minMaxLoc(scores)
+            x, y = left + dx, top + dy
+            candidate = (score, x + w//2, y + h//2, x, y, ring)
+            if best is None or score > best[0]:
+                best = candidate
+        if best is None or best[0] < .45:
+            raise ValueError(f"Page {page}: uncertain ornament at {(cx, cy)}")
+        _, cx, cy, x, y, ring = best
+        mask = np.zeros(a.shape, bool)
+        mask[y:y+ring.shape[0], x:x+ring.shape[1]] = ring
+        refined.append((cx, cy, mask))
+    return sorted(refined, key=lambda m: (round((m[1]-52)/93), -m[0]))
 
 
 def erase_and_redraw(image, positions, page):
