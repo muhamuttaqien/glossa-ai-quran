@@ -158,13 +158,11 @@ def build_page(original, page):
         banner = draw_banner(w, h, y1, y2)
         output[banner[:, :, 3] > 0] = banner[banner[:, :, 3] > 0]
         if page == 2:
-            # Use the lettering pixels from the user's full-resolution page 2
-            # reference. Only the title changes; the original verses remain.
-            alpha = np.asarray(AL_BAQARAH_TITLE.getchannel("A").resize(
-                (88, 30), Image.Resampling.LANCZOS
-            ))
-            title_region = output[126:156, 177:265]
-            title_region[alpha > 0, :3] = (34, 36, 35)
+            # Keep the printed lettering at its native size and preserve its
+            # anti-aliased edges after removing the original crest backdrop.
+            alpha = np.asarray(AL_BAQARAH_TITLE.getchannel("A"))
+            title_region = output[126:158, 179:264]
+            title_region[alpha > 0, :3] = (52, 40, 44)
             title_region[:, :, 3] = alpha
         else:
             title, shift = title_ink(original, page, y1, y2)
