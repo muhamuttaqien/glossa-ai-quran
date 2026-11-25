@@ -364,7 +364,7 @@ private fun QuranApp(
                                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                                     TextButton(onClick = {
                                         mode = index
-                                        if (index == 0) chromeVisible = false
+                                        chromeVisible = false
                                         preferences.edit { putInt("mode", index) }
                                     }, modifier = Modifier.fillMaxWidth()) {
                                         Text(label, color = if (mode == index) MaterialTheme.colorScheme.onSurface else Color.Gray)
@@ -437,21 +437,59 @@ private fun QuranApp(
                 }
             }
 
-            if (mode == 0 && chapter != null && chapterError == null) {
+            if (chapter != null && chapterError == null) {
                 Box(Modifier.fillMaxSize().padding(padding)) {
-                    MushafPage(
-                        currentPage, night, hitMap,
-                        selectedAyah = focusedAyah?.let { VerseReference(selected!!.number, it.number) },
-                        chromeVisible = chromeVisible,
-                        onToggleControls = { chromeVisible = !chromeVisible },
-                        onPrevious = { if (currentPage > 1) currentPage-- },
-                        onNext = { if (currentPage < 604) currentPage++ },
-                        onLongPressAt = { x, y, width, height ->
-                            hitMap.verseAt(currentPage, x, y, width, height)
-                                ?.let(::openPageAyah)
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    if (mode == 0) {
+                        MushafPage(
+                            currentPage, night, hitMap,
+                            selectedAyah = focusedAyah?.let { VerseReference(selected!!.number, it.number) },
+                            chromeVisible = chromeVisible,
+                            onToggleControls = { chromeVisible = !chromeVisible },
+                            onPrevious = { if (currentPage > 1) currentPage-- },
+                            onNext = { if (currentPage < 604) currentPage++ },
+                            onLongPressAt = { x, y, width, height ->
+                                hitMap.verseAt(currentPage, x, y, width, height)
+                                    ?.let(::openPageAyah)
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        LazyColumn(
+                            Modifier.fillMaxSize()
+                                .semantics {
+                                    customActions = listOf(
+                                        CustomAccessibilityAction(
+                                            if (chromeVisible) "Hide reading controls" else "Show reading controls"
+                                        ) { chromeVisible = !chromeVisible; true }
+                                    )
+                                }
+                                .pointerInput(chromeVisible) {
+                                    detectTapGestures(onTap = { chromeVisible = !chromeVisible })
+                                },
+                            state = verseListState
+                        ) {
+                            items(verses, key = { it.number }) { ayah ->
+                                AyahCard(
+                                    ayah, night, language, chapter!!,
+                                    isBookmarked = "${selected!!.number}:${ayah.number}" in bookmarks,
+                                    audioReady = audioUrls.containsKey(ayah.number),
+                                    play = { startVerse(ayah.number - 1) },
+                                    bookmark = { toggleBookmark(selected!!.number, ayah.number) },
+                                    share = { shareAyah(ayah) },
+                                ) {
+                                    markRead(selected!!.number, ayah.number)
+                                    chromeVisible = !chromeVisible
+                                }
+                            }
+                            item {
+                                Text(
+                                    "Text: AlQuran Cloud • Translation: ${translationCredits(chapter!!, language)}",
+                                    Modifier.fillMaxWidth().padding(20.dp),
+                                    color = Color.Gray, fontSize = 12.sp, textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
                     AnimatedVisibility(
                         visible = chromeVisible,
                         modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
@@ -470,28 +508,6 @@ private fun QuranApp(
                     topControls()
                     if (chapterError != null) Failure(chapterError!!) { chapterRetry++ }
                     else if (chapter == null) Loading()
-                    else {
-                        LazyColumn(Modifier.weight(1f), state = verseListState) {
-                            items(verses, key = { it.number }) { ayah ->
-                                AyahCard(
-                                    ayah, night, language, chapter!!,
-                                    isBookmarked = "${selected!!.number}:${ayah.number}" in bookmarks,
-                                    audioReady = audioUrls.containsKey(ayah.number),
-                                    play = { startVerse(ayah.number - 1) },
-                                    bookmark = { toggleBookmark(selected!!.number, ayah.number) },
-                                    share = { shareAyah(ayah) },
-                                ) { markRead(selected!!.number, ayah.number) }
-                            }
-                            item {
-                                Text(
-                                    "Text: AlQuran Cloud • Translation: ${translationCredits(chapter!!, language)}",
-                                    Modifier.fillMaxWidth().padding(20.dp),
-                                    color = Color.Gray, fontSize = 12.sp, textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-                        bottomControls()
-                    }
                 }
             }
         }
