@@ -708,6 +708,17 @@ private fun ReaderHeader(title: String, night: Boolean, toggleNight: () -> Unit,
     }
 }
 
+// Only these printed pages contain ornamental frames or surah-title banners.
+private val frameFreeMushafPages = setOf(
+    1, 2, 50, 76, 106, 128, 151, 177, 187, 207, 221, 235, 249, 255, 262, 267,
+    282, 293, 305, 312, 322, 331, 341, 349, 359, 366, 376, 385, 396, 404, 411,
+    414, 417, 428, 434, 440, 445, 452, 458, 467, 477, 483, 489, 496, 498, 502,
+    506, 511, 515, 518, 520, 523, 525, 528, 531, 534, 537, 542, 545, 548, 551,
+    553, 554, 555, 557, 560, 562, 564, 566, 568, 570, 572, 574, 575, 577, 578,
+    580, 582, 583, 584, 586, 587, 589, 590, 591, 592, 593, 594, 595, 596, 597,
+    598, 599, 600, 601, 602, 603, 604
+)
+
 @Composable
 private fun MushafPage(
     page: Int, night: Boolean,
@@ -719,7 +730,7 @@ private fun MushafPage(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val bitmap = remember(page) {
-        val assetPath = if (page == 1) "mushaf/1-no-frame.png" else "mushaf/$page.png"
+        val assetPath = if (page in frameFreeMushafPages) "mushaf/$page-no-frame.png" else "mushaf/$page.png"
         context.assets.open(assetPath).use { stream ->
             BitmapFactory.decodeStream(stream)
         }
