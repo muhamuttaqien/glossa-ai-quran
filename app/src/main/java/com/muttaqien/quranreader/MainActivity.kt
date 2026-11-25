@@ -719,7 +719,8 @@ private fun MushafPage(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val bitmap = remember(page) {
-        context.assets.open("mushaf/$page.png").use { stream ->
+        val assetPath = if (page == 1) "mushaf/1-no-frame.png" else "mushaf/$page.png"
+        context.assets.open(assetPath).use { stream ->
             BitmapFactory.decodeStream(stream)
         }
     }
