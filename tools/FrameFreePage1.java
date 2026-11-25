@@ -22,9 +22,8 @@ public class FrameFreePage1 {
         int height = original.getHeight();
         boolean[] allowed = new boolean[width * height];
         boolean[] ink = new boolean[width * height];
-        for (int y = 0; y < cleaned.getHeight(); y++) {
-            for (int x = 0; x < cleaned.getWidth(); x++) cleaned.setRGB(x, y, 0xffffffff);
-        }
+        // Unwritten pixels remain transparent; the app's page surface supplies
+        // the light or dark background without baking either color into the PNG.
         for (int[] box : VERSE_SEGMENTS) {
             for (int y = Math.max(0, box[1]); y < Math.min(height, box[3]); y++) {
                 for (int x = Math.max(0, box[0]); x < Math.min(width, box[2]); x++) {
