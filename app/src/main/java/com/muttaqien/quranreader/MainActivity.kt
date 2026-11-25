@@ -602,8 +602,8 @@ private fun MushafPage(
                     onDragStart = { totalDrag = 0f },
                     onDragEnd = {
                         when {
-                            totalDrag <= -swipeThreshold -> onNext()
-                            totalDrag >= swipeThreshold -> onPrevious()
+                            totalDrag >= swipeThreshold -> onNext()
+                            totalDrag <= -swipeThreshold -> onPrevious()
                         }
                         totalDrag = 0f
                     },
@@ -620,7 +620,7 @@ private fun MushafPage(
                 Text(verses.firstOrNull()?.let { "Juz ${it.juz}" } ?: "", color = pageText, fontSize = 13.sp)
             }
             Image(
-                bitmap = image, contentDescription = "Mushaf Madinah Hafs page $page. Tap to choose a verse. Swipe left or right to change pages.",
+                bitmap = image, contentDescription = "Mushaf Madinah Hafs page $page. Tap to choose a verse. Swipe right for the next page or left for the previous page.",
                 modifier = Modifier.fillMaxWidth().weight(1f)
                     .semantics {
                         customActions = listOf(
