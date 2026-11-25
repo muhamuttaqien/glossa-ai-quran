@@ -123,6 +123,43 @@ def simplify_marker(original, output, center):
     ink = inner & (luma < 155) & (original[y0:y1, x0:x1, 3] > 0)
     if not np.any(ink):
         raise ValueError(f"No printed numeral ink at ({cx}, {cy})")
+    # The printed marker has ornamental tips above and below its numeral.
+    # Isolate connected ink components before drawing the simple circle; a
+    # brightness threshold alone also picks up those detached tips.
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(ink.astype(np.uint8), 8)
+    limit = max(5, radius - 6)
+    components = [
+        (index, int(stats[index, cv2.CC_STAT_TOP]) + y0 - cy,
+         int(stats[index, cv2.CC_STAT_HEIGHT]), int(stats[index, cv2.CC_STAT_AREA]),
+         int(stats[index, cv2.CC_STAT_LEFT]) + x0 - cx,
+         int(stats[index, cv2.CC_STAT_WIDTH]))
+        for index in range(1, count)
+    ]
+    # Two original markers place their numerals low inside the ornament.
+    # Recognize the separate upper ornament rather than clipping those digits.
+    shifted = (
+        any(area >= 9 and top <= -limit and top + height - 1 <= -1
+            for _, top, height, area, _, _ in components)
+        and any(area >= 9 and top >= -1 and top + height - 1 >= limit
+                for _, top, height, area, _, _ in components)
+    )
+    kept = []
+    for index, top, height, area, left, width in components:
+        bottom = top + height - 1
+        if shifted:
+            keep = area >= 9 and top >= -1
+        else:
+            stray_tip = area <= 8 and (
+                bottom <= -limit or top >= limit
+                or (top >= limit - 2 and bottom >= limit)
+                or left + width - 1 <= -9 or left >= 9
+            )
+            keep = not stray_tip
+        if keep:
+            kept.append(index)
+    ink &= np.isin(labels, kept)
+    if not np.any(ink):
+        raise ValueError(f"No numeral left after removing ornament at ({cx}, {cy})")
     numerator = np.zeros((y1 - y0, x1 - x0, 4), dtype=np.uint8)
     numerator[ink] = original[y0:y1, x0:x1][ink]
     circle = Image.new("RGBA", (x1 - x0, y1 - y0))
