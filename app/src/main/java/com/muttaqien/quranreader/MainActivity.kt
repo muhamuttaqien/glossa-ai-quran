@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -67,12 +66,13 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -174,8 +174,6 @@ private fun QuranApp(
     var pendingFocusedAyah by remember { mutableStateOf<VerseReference?>(null) }
     var currentPage by rememberSaveable { mutableIntStateOf(1) }
     var pageVerses by remember { mutableStateOf<List<PageVerse>>(emptyList()) }
-    var pageError by remember { mutableStateOf<String?>(null) }
-    var showPageVerses by remember { mutableStateOf(value = false) }
     val verseListState = rememberLazyListState()
 
     fun openSurah(surah: Surah, ayah: Int = 1) {
@@ -199,21 +197,15 @@ private fun QuranApp(
     }
 
     fun openPageAyah(reference: VerseReference) {
-        val surah = surahs.firstOrNull { it.number == reference.surah }
-        if (surah == null) {
-            showPageVerses = true
-            return
-        }
+        val surah = surahs.firstOrNull { it.number == reference.surah } ?: return
         if (selected?.number != reference.surah) {
             openSurah(surah, reference.ayah)
             pendingFocusedAyah = reference
         } else {
             val ayah = chapter?.verses?.firstOrNull { it.number == reference.ayah }
-            if (ayah == null) showPageVerses = true
-            else {
-                focusedAyah = ayah
-                markRead(reference.surah, reference.ayah)
-            }
+                ?: return
+            focusedAyah = ayah
+            markRead(reference.surah, reference.ayah)
         }
     }
 
@@ -291,10 +283,9 @@ private fun QuranApp(
     LaunchedEffect(currentPage, selected?.number) {
         if (selected == null) return@LaunchedEffect
         pageVerses = emptyList()
-        pageError = null
         try { pageVerses = repository.pageVerses(currentPage) }
         catch (e: CancellationException) { throw e }
-        catch (_: Exception) { pageError = "Verse navigation requires a connection for this page." }
+        catch (_: Exception) { /* The bundled image and tap map remain usable. */ }
     }
 
     fun startVerse(index: Int) {
@@ -368,14 +359,13 @@ private fun QuranApp(
                     val verses = chapter!!.verses
                     if (mode == 0) {
                         MushafPage(
-                            currentPage, pageVerses, pageError, night,
+                            currentPage, pageVerses, night, hitMap,
+                            selectedAyah = focusedAyah?.let { VerseReference(selected!!.number, it.number) },
                             onPrevious = { if (currentPage > 1) currentPage-- },
                             onNext = { if (currentPage < 604) currentPage++ },
-                            onOpenVerses = { showPageVerses = true },
                             onTapAt = { x, y, width, height ->
-                                val reference = hitMap.verseAt(currentPage, x, y, width, height)
-                                if (reference == null) showPageVerses = true
-                                else openPageAyah(reference)
+                                hitMap.verseAt(currentPage, x, y, width, height)
+                                    ?.let(::openPageAyah)
                             },
                             modifier = Modifier.weight(1f)
                         )
@@ -420,41 +410,14 @@ private fun QuranApp(
                         onToggle = {
                             if (currentVerse < 0 || player.error != null) {
                                 if (mode == 0) {
-                                    val reference = pageVerses.firstOrNull { it.reference.surah == selected!!.number }?.reference
-                                    if (reference?.surah == selected!!.number) startVerse(reference.ayah - 1)
-                                    else showPageVerses = true
+                                    verses.firstOrNull { it.page == currentPage }
+                                        ?.let { startVerse(it.number - 1) }
                                 } else startVerse(startAyah - 1)
                             }
                             else player.toggle()
                         }
                     )
                 }
-            }
-        }
-    }
-
-    if (showPageVerses && selected != null) {
-        ModalBottomSheet(onDismissRequest = { showPageVerses = false }) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
-                Text("Page $currentPage • Verses", fontWeight = FontWeight.Bold)
-                if (pageError != null) Text(pageError!!, color = MaterialTheme.colorScheme.error)
-                else if (pageVerses.isEmpty()) CircularProgressIndicator(Modifier.padding(20.dp))
-                else LazyColumn(Modifier.heightIn(max = 450.dp)) {
-                    items(pageVerses, key = { "${it.reference.surah}:${it.reference.ayah}" }) { verse ->
-                        TextButton(onClick = {
-                            showPageVerses = false
-                            val surah = surahs.firstOrNull { it.number == verse.reference.surah }
-                            if (surah != null) {
-                                openSurah(surah, verse.reference.ayah)
-                                mode = 1
-                                preferences.edit { putInt("mode", 1) }
-                            }
-                        }, modifier = Modifier.fillMaxWidth()) {
-                            Text("${verse.surahName} • Verse ${verse.reference.ayah}", Modifier.fillMaxWidth())
-                        }
-                    }
-                }
-                Spacer(Modifier.height(20.dp))
             }
         }
     }
@@ -648,8 +611,9 @@ private fun ReaderHeader(title: String, night: Boolean, toggleNight: () -> Unit,
 
 @Composable
 private fun MushafPage(
-    page: Int, verses: List<PageVerse>, error: String?, night: Boolean,
-    onPrevious: () -> Unit, onNext: () -> Unit, onOpenVerses: () -> Unit,
+    page: Int, verses: List<PageVerse>, night: Boolean,
+    hitMap: MushafHitMap, selectedAyah: VerseReference?,
+    onPrevious: () -> Unit, onNext: () -> Unit,
     onTapAt: (Float, Float, Int, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -663,7 +627,10 @@ private fun MushafPage(
     val pageText = if (night) TextWhite else Ink
     val swipeThreshold = with(LocalDensity.current) { 64.dp.toPx() }
     val latestTapAt by rememberUpdatedState(onTapAt)
-    val latestOpenVerses by rememberUpdatedState(onOpenVerses)
+    val highlightAreas = remember(page, selectedAyah, image.width, image.height) {
+        selectedAyah?.let { hitMap.areasFor(page, it, image.width, image.height) }
+            ?: emptyList()
+    }
     // Keep the fixed page layout and glyphs; only remap its luminance for night reading.
     val nightFilter = remember {
         ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
@@ -698,14 +665,10 @@ private fun MushafPage(
                 Text(verses.firstOrNull()?.surahName ?: "Page $page", color = pageText, fontSize = 13.sp)
                 Text(verses.firstOrNull()?.let { "Juz ${it.juz}" } ?: "", color = pageText, fontSize = 13.sp)
             }
-            Image(
-                bitmap = image, contentDescription = "Mushaf Madinah Hafs page $page. Tap to choose a verse. Swipe right for the next page or left for the previous page.",
-                modifier = Modifier.fillMaxWidth().weight(1f)
+            Box(
+                Modifier.fillMaxWidth().weight(1f)
                     .semantics {
-                        onClick(label = "Choose a verse from this page") {
-                            onOpenVerses()
-                            true
-                        }
+                        contentDescription = "Mushaf Madinah Hafs page $page. Tap an ayah to select it. Swipe right for the next page or left for the previous page."
                         customActions = listOf(
                             CustomAccessibilityAction("Next page") {
                                 if (page < 604) { onNext(); true } else false
@@ -728,18 +691,43 @@ private fun MushafPage(
                             if (x in 0f..image.width.toFloat() &&
                                 y in 0f..image.height.toFloat()
                             ) latestTapAt(x, y, image.width, image.height)
-                            else latestOpenVerses()
                         }
-                    },
-                contentScale = ContentScale.Fit,
-                colorFilter = if (night) nightFilter else null
-            )
+                    }
+            ) {
+                Image(
+                    bitmap = image,
+                    contentDescription = null,
+                    modifier = Modifier.matchParentSize(),
+                    contentScale = ContentScale.Fit,
+                    colorFilter = if (night) nightFilter else null
+                )
+                if (highlightAreas.isNotEmpty()) {
+                    Canvas(Modifier.matchParentSize()) {
+                        val scale = minOf(size.width / image.width, size.height / image.height)
+                        val left = (size.width - image.width * scale) / 2f
+                        val top = (size.height - image.height * scale) / 2f
+                        highlightAreas.forEach { area ->
+                            val x = left + (area.left + 2f) * scale
+                            val y = top + (area.top + 1f) * scale
+                            val width = (area.width() - 4f) * scale
+                            val height = (area.height() - 2f) * scale
+                            if (width > 0f && height > 0f) {
+                                drawRoundRect(
+                                    color = Gold.copy(alpha = if (night) 0.24f else 0.18f),
+                                    topLeft = Offset(x, y),
+                                    size = Size(width, height),
+                                    cornerRadius = CornerRadius(3.dp.toPx())
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             Text(
                 "$page / 604",
                 Modifier.fillMaxWidth().padding(vertical = 12.dp),
                 color = pageText, textAlign = TextAlign.Center, fontSize = 13.sp
             )
-            error?.let { Text(it, color = Color(0xFF9B3333), fontSize = 11.sp) }
         }
     }
 }
