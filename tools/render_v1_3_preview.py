@@ -72,7 +72,7 @@ def main():
     text(draw, 413, 60, "Glossa AI - Qur'an Version (v1.3)", 37,
          (34, 36, 38), bold=True, anchor="lm")
     text(draw, WIDTH / 2, 126,
-         "Penanda Ayat Merah  ·  Kontrol Saat Diketuk  ·  Swipe Beranimasi",
+         "Red Verse Markers  ·  Tap to Toggle Controls  ·  Animated Page Swipe",
          21, (77, 83, 83), bold=True, anchor="mm")
 
     for x, name, image_path in (
