@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 
 /** Keep the printed layout, invert text as before, and retain muted red ornaments. */
 internal object MushafNightPalette {
-    private const val LIGHT_RED = 0xC46B6B
     private const val DARK_RED = 0xB87575
 
     fun convert(source: Bitmap): Bitmap {
@@ -17,11 +16,17 @@ internal object MushafNightPalette {
             val alpha = argb ushr 24
             if (alpha == 0) continue
             val rgb = argb and 0xFFFFFF
-            val mapped = if (rgb == LIGHT_RED) DARK_RED else {
-                val red = (240f - .85f * (rgb ushr 16 and 255)).toInt().coerceIn(0, 255)
-                val green = (240f - .85f * (rgb ushr 8 and 255)).toInt().coerceIn(0, 255)
-                val blue = (240f - .85f * (rgb and 255)).toInt().coerceIn(0, 255)
-                (red shl 16) or (green shl 8) or blue
+            val red = rgb ushr 16 and 255
+            val green = rgb ushr 8 and 255
+            val blue = rgb and 255
+            // The floral art has translucent edges. Bitmap decoding and getPixels()
+            // can round their unpremultiplied RGB values away from #C46B6B.
+            val isMutedRed = red in 180..212 && green in 91..123 && blue in 91..123
+            val mapped = if (isMutedRed) DARK_RED else {
+                val invertedRed = (240f - .85f * red).toInt().coerceIn(0, 255)
+                val invertedGreen = (240f - .85f * green).toInt().coerceIn(0, 255)
+                val invertedBlue = (240f - .85f * blue).toInt().coerceIn(0, 255)
+                (invertedRed shl 16) or (invertedGreen shl 8) or invertedBlue
             }
             pixels[index] = (alpha shl 24) or mapped
         }
